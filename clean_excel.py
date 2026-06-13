@@ -54,11 +54,8 @@ def clean_dni(val):
         return temp_s
         
     # Standard DNI
-    if temp_s.isdigit():
-        if len(temp_s) == 7:
-            return "0" + temp_s
-        elif len(temp_s) == 8:
-            return temp_s
+    if temp_s.isdigit() and len(temp_s) <= 8:
+        return temp_s.zfill(8)
             
     return None
 
