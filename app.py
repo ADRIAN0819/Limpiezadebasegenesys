@@ -319,7 +319,7 @@ with tab2:
         )
         
         if tipo_calif == "CIERRE":
-            uploaded_comercios = st.file_uploader("Sube la lista de Comercios Riesgosos (xlsx - Opcional)", type=["xlsx"], key="t2_comercios")
+            uploaded_comercios = st.file_uploader("Sube la lista de Comercios Riesgosos (xlsx - Opcional, por defecto usa 'COMERCIOS RIESGOSOS.xlsx')", type=["xlsx"], key="t2_comercios")
         else:
             uploaded_comercios = None
 
@@ -461,8 +461,12 @@ with tab2:
                         if tipo_calif == "PENDIENTES":
                             df_lista['CALIFICACION'] = "PEND - Alerta pendiente(Temporal)"
                         else:
+                            import os
                             if uploaded_comercios is not None:
                                 df_comercios = pd.read_excel(uploaded_comercios, dtype=str)
+                                comercios_riesgosos = df_comercios['NOMBRE'].fillna("").astype(str).str.strip().str.upper().tolist()
+                            elif os.path.exists("COMERCIOS RIESGOSOS.xlsx"):
+                                df_comercios = pd.read_excel("COMERCIOS RIESGOSOS.xlsx", dtype=str)
                                 comercios_riesgosos = df_comercios['NOMBRE'].fillna("").astype(str).str.strip().str.upper().tolist()
                             else:
                                 comercios_riesgosos = []
