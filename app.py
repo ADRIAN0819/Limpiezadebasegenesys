@@ -9,7 +9,7 @@ from clean_excel import clean_card, clean_account, clean_dni, clean_phone, to_st
 # Page configuration
 st.set_page_config(
     page_title="Herramienta de Gestión de Fraudes - Genesys",
-    page_icon="🧼",
+    page_icon="🚨",
     layout="wide",
     initial_sidebar_state="expanded"
 )
