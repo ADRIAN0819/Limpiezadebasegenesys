@@ -50,7 +50,7 @@ st.markdown("""
 st.title("🧼 Sistema de Gestión de Bases de Fraude Genesys")
 st.markdown("Plataforma interactiva para limpieza de bases y cruce de datos del Predictivo.")
 
-tab1, tab2 = st.tabs(["🧼 Limpieza de Base (Excel)", "🔀 Generar Base de Cruce (Predictivo)"])
+tab1, tab2, tab3 = st.tabs(["🧼 Limpieza de Base (Excel)", "🔀 Generar Base de Cruce (Predictivo)", "📋 Generar Plantilla (Masivo)"])
 
 # ================= TAB 1: LIMPIEZA DE BASE =================
 with tab1:
@@ -671,3 +671,250 @@ with tab2:
                     )
     else:
         st.info("💡 Sube todos los archivos obligatorios arriba para habilitar el procesamiento del cruce predictivo.")
+
+# ================= TAB 3: GENERAR PLANTILLA (MASIVO) =================
+with tab3:
+    st.header("Generar Plantilla de Gestión de Fraude (Masivo)")
+    st.markdown("Genera la plantilla de gestión a partir de la base masiva y los comercios riesgosos.")
+
+    import datetime
+    import re
+    import os
+
+    if "t3_processed" not in st.session_state:
+        st.session_state.t3_processed = False
+        st.session_state.t3_output_data = None
+        st.session_state.t3_total_rows = 0
+
+    col_t3_files1, col_t3_files2 = st.columns(2)
+    with col_t3_files1:
+        uploaded_base_masivo = st.file_uploader("Sube BASE MASIVO (xlsx)", type=["xlsx"], key="t3_base_masivo")
+    with col_t3_files2:
+        uploaded_comercios_t3 = st.file_uploader("Sube COMERCIOS RIESGOSOS (xlsx - Opcional)", type=["xlsx"], key="t3_comercios")
+
+    now = datetime.datetime.now()
+    default_fecha = now.strftime("%d/%m/%Y")
+    default_hora = now.strftime("%H:%M:%S")
+
+    st.subheader("Configuración de Plantilla")
+    col_t3_conf1, col_t3_conf2 = st.columns(2)
+    with col_t3_conf1:
+        fecha_val = st.text_input("Ingresa la FECHA (DD/MM/AAAA):", value=default_fecha, key="t3_fecha")
+        hora_val = st.text_input("Ingresa la HORA (HH:MM:SS):", value=default_hora, key="t3_hora")
+    with col_t3_conf2:
+        comunicacion_val = st.text_input("Ingresa el valor de COMUNICACION 1:", value="LLAMADA PREDICTIVA", key="t3_comunicacion")
+        nombre_archivo_t3 = st.text_input("Nombre para el archivo final (sin extensión):", value="PLANTILLA_MASIVO", key="t3_nombre_final")
+
+    # Reset state if base masivo file changes
+    if uploaded_base_masivo is not None:
+        if st.session_state.get("t3_current_file") != uploaded_base_masivo.name:
+            st.session_state.t3_processed = False
+            st.session_state.t3_current_file = uploaded_base_masivo.name
+
+        if st.button("Generar Plantilla Masiva", key="t3_process_btn") or st.session_state.t3_processed:
+            if not st.session_state.t3_processed:
+                with st.spinner("Procesando y generando plantilla..."):
+                    try:
+                        # Load COMERCIOS RIESGOSOS
+                        comercios_riesgosos = set()
+                        if uploaded_comercios_t3 is not None:
+                            wb_com = openpyxl.load_workbook(uploaded_comercios_t3)
+                            ws_com = wb_com.active
+                            for row in ws_com.iter_rows(min_row=2, values_only=True):
+                                nombre = row[0]
+                                if nombre:
+                                    comercios_riesgosos.add(str(nombre).strip().upper())
+                        elif os.path.exists("COMERCIOS RIESGOSOS.xlsx"):
+                            wb_com = openpyxl.load_workbook("COMERCIOS RIESGOSOS.xlsx")
+                            ws_com = wb_com.active
+                            for row in ws_com.iter_rows(min_row=2, values_only=True):
+                                nombre = row[0]
+                                if nombre:
+                                    comercios_riesgosos.add(str(nombre).strip().upper())
+
+                        # Load BASE MASIVO
+                        wb_base = openpyxl.load_workbook(uploaded_base_masivo)
+                        ws_base = wb_base.active
+
+                        # Map headers to indices
+                        headers_base = [cell.value for cell in ws_base[1]]
+                        def col_idx(name):
+                            try:
+                                return headers_base.index(name)
+                            except ValueError:
+                                return None
+
+                        idx_dni        = col_idx("BASE FINAL[BASE WF.DNI]")
+                        idx_nombre     = col_idx("BASE FINAL[BASE WF.NOMBRE DEL CLIENTE]")
+                        idx_cuenta     = col_idx("BASE FINAL[BASE WF.CUENTA]")
+                        idx_tarjeta    = col_idx("BASE FINAL[BASE WF.TARJETA]")
+                        idx_canal      = col_idx("BASE FINAL[BASE WF.CANAL]")
+                        idx_fechatrx   = col_idx("BASE FINAL[FECHATRX]")
+                        idx_horatrx    = col_idx("BASE FINAL[HORATRX]")
+                        idx_comercio   = col_idx("BASE FINAL[NOMBRECOMERCIO]")
+                        idx_celular    = col_idx("BASE FINAL[BASE WF.CELULAR/TELEFONO]")
+
+                        # Output columns
+                        output_columns = [
+                            "EXPEDIENTE", "FECHA", "HORA", "TIPO DE GESTIÓN", "GESTIÓN", "GESTIÓN MOTIVO",
+                            "FECHA Y HORA DE ALERTA", "FECHA Y HORA DE ATENCION", "Of. Banco de la Nación",
+                            "Anexo Interno", "Nombre Funcionario BN", "CELULAR/TELEFONO", "DNI",
+                            "NOMBRE DEL CLIENTE", "CORREO", "CUENTA EMISORA", "CUENTA RECEPTORA",
+                            "CUENTA RECEPTORA 2", "CUENTA RECEPTORA 3", "NRO. GIRO 1", "NRO. GIRO 2",
+                            "NRO. GIRO 3", "NRO. GIRO 4", "NRO. GIRO 5", "TARJETA", "N° BLQ",
+                            "FECHA(BLQ_VIG)", "CANAL", "REGLA MONITOREO", "REGLA O PARAMETRO DE BLOQUEO",
+                            "SITUACION_BDUC", "CALIFICACION", "OPCION CALIFICACION",
+                            "FECHA Y HORA DE ENVIO DE CORREO", "IMPORTE DE FRAUDE", "GESTOR", "COMENTARIO",
+                            "DIA DE EVENTO", "HORA DE EVENTO", "TIEMPO DE DURACION", "G2",
+                            "FALLECIMIENTO (SI/NO)", "APLICACIÓN", "Columna2", "Columna3",
+                            "RESULTADO DE LLAMADA", "NIVEL DE RESPUESTA", "MOTIVO DE ATENCION",
+                            "VALIDACION DE IDENTIDAD", "TIPO DE TRANSACCION", "IMPORTE RECUPERADO",
+                            "NUMERO DE RECLAMO", "TIPO DE FRAUDE", "VIGILANCIA DE CUENTA",
+                            "LEVANTAMIENTO VIGILANCIA", "SOLUCION DE CASO", "FECHA Y HORA BLOQUEO",
+                            "FECHA Y HORA DESBLOQUEO", "COMUNICACION 1", "COMUNICACION 2",
+                            "COMUNICACION 3", "FECHA MODIFICACION", "MATERIALIZACION DE FRAUDE",
+                            "SALDO DISPONIBLE", "TIPO DE CUENTA", "CONCLUSION", "FECHA BLOQUEO DE TARJETA"
+                        ]
+
+                        wb_out = openpyxl.Workbook()
+                        ws_out = wb_out.active
+                        ws_out.title = "REGISTROS WEBFORM"
+                        ws_out.sheet_format.defaultRowHeight = 12.75
+
+                        for col_num, col_name in enumerate(output_columns, start=1):
+                            ws_out.cell(row=1, column=col_num, value=col_name)
+
+                        def str_val(v):
+                            if v is None:
+                                return ""
+                            return str(v).strip()
+
+                        def format_hora(h):
+                            if not h:
+                                return ""
+                            s = str(h).strip()
+                            if "|" in s:
+                                s = s.split("|")[0].strip()
+                            match = re.match(r"(\d{1,2}:\d{2})", s)
+                            if match:
+                                return match.group(1)
+                            return s[:5] if len(s) >= 5 else s
+
+                        def calificacion(comercio_val):
+                            if comercio_val:
+                                c = str(comercio_val).strip().upper()
+                                if c in comercios_riesgosos:
+                                    return "FAG - Fraude por análisis del gestor"
+                            return "DAG - Descarte por análisis del gestor"
+
+                        row_out = 2
+                        for row in ws_base.iter_rows(min_row=2, values_only=True):
+                            dni          = str_val(row[idx_dni])         if idx_dni is not None else ""
+                            nombre       = str_val(row[idx_nombre])      if idx_nombre is not None else ""
+                            cuenta       = str_val(row[idx_cuenta])      if idx_cuenta is not None else ""
+                            tarjeta      = str_val(row[idx_tarjeta])     if idx_tarjeta is not None else ""
+                            canal        = str_val(row[idx_canal])       if idx_canal is not None else ""
+                            fechatrx     = str_val(row[idx_fechatrx])   if idx_fechatrx is not None else ""
+                            horatrx_raw  = str_val(row[idx_horatrx])    if idx_horatrx is not None else ""
+                            comercio_val = row[idx_comercio]             if idx_comercio is not None else None
+                            celular      = str_val(row[idx_celular])     if idx_celular is not None else ""
+
+                            hora_evento  = format_hora(horatrx_raw)
+                            calific      = calificacion(comercio_val)
+
+                            row_data = {
+                                "EXPEDIENTE":                    "",
+                                "FECHA":                         fecha_val,
+                                "HORA":                          hora_val,
+                                "TIPO DE GESTIÓN":               "Outbound",
+                                "GESTIÓN":                       "Call Out Monitoreo",
+                                "GESTIÓN MOTIVO":                "",
+                                "FECHA Y HORA DE ALERTA":        "",
+                                "FECHA Y HORA DE ATENCION":      "",
+                                "Of. Banco de la Nación":        "",
+                                "Anexo Interno":                 "",
+                                "Nombre Funcionario BN":         "",
+                                "CELULAR/TELEFONO":              celular,
+                                "DNI":                           dni,
+                                "NOMBRE DEL CLIENTE":            nombre,
+                                "CORREO":                        "",
+                                "CUENTA EMISORA":                cuenta,
+                                "CUENTA RECEPTORA":              "",
+                                "CUENTA RECEPTORA 2":            "",
+                                "CUENTA RECEPTORA 3":            "",
+                                "NRO. GIRO 1":                   "",
+                                "NRO. GIRO 2":                   "",
+                                "NRO. GIRO 3":                   "",
+                                "NRO. GIRO 4":                   "",
+                                "NRO. GIRO 5":                   "",
+                                "TARJETA":                       tarjeta,
+                                "N° BLQ":                        "",
+                                "FECHA(BLQ_VIG)":                "",
+                                "CANAL":                         canal,
+                                "REGLA MONITOREO":               "",
+                                "REGLA O PARAMETRO DE BLOQUEO":  "",
+                                "SITUACION_BDUC":                "ACTUALIZADO",
+                                "CALIFICACION":                  calific,
+                                "OPCION CALIFICACION":           "",
+                                "FECHA Y HORA DE ENVIO DE CORREO": "",
+                                "IMPORTE DE FRAUDE":             "",
+                                "GESTOR":                        "DAVID JOSUE ZAMBRANO LEON",
+                                "COMENTARIO":                    "",
+                                "DIA DE EVENTO":                 fechatrx,
+                                "HORA DE EVENTO":                hora_evento,
+                                "TIEMPO DE DURACION":            "Activa",
+                                "G2":                            "",
+                                "FALLECIMIENTO (SI/NO)":         "NO",
+                                "APLICACIÓN":                    "",
+                                "Columna2":                      "",
+                                "Columna3":                      "",
+                                "RESULTADO DE LLAMADA":          "No Contactado",
+                                "NIVEL DE RESPUESTA":            "Cliente no contesta",
+                                "MOTIVO DE ATENCION":            "",
+                                "VALIDACION DE IDENTIDAD":       "",
+                                "TIPO DE TRANSACCION":           "",
+                                "IMPORTE RECUPERADO":            "",
+                                "NUMERO DE RECLAMO":             "",
+                                "TIPO DE FRAUDE":                "",
+                                "VIGILANCIA DE CUENTA":          "",
+                                "LEVANTAMIENTO VIGILANCIA":      "NO APLICA",
+                                "SOLUCION DE CASO":              "Solucionada",
+                                "FECHA Y HORA BLOQUEO":          "",
+                                "FECHA Y HORA DESBLOQUEO":       "",
+                                "COMUNICACION 1":                comunicacion_val,
+                                "COMUNICACION 2":                "",
+                                "COMUNICACION 3":                "",
+                                "FECHA MODIFICACION":            "",
+                                "MATERIALIZACION DE FRAUDE":     "",
+                                "SALDO DISPONIBLE":              "",
+                                "TIPO DE CUENTA":                "",
+                                "CONCLUSION":                    "",
+                                "FECHA BLOQUEO DE TARJETA":      "",
+                            }
+
+                            for col_num, col_name in enumerate(output_columns, start=1):
+                                val  = row_data.get(col_name, "")
+                                cell = ws_out.cell(row=row_out, column=col_num, value=val)
+                                cell.number_format = "@"
+
+                            row_out += 1
+
+                        out_buffer = io.BytesIO()
+                        wb_out.save(out_buffer)
+                        st.session_state.t3_output_data = out_buffer.getvalue()
+                        st.session_state.t3_total_rows = row_out - 2
+                        st.session_state.t3_processed = True
+                    except Exception as err:
+                        st.error(f"Ocurrió un error al generar la plantilla: {err}")
+
+            if st.session_state.t3_processed:
+                st.success(f"🎉 ¡Plantilla generada con éxito! ({st.session_state.t3_total_rows} registros)")
+                st.download_button(
+                    label=f"Descargar {nombre_archivo_t3}.xlsx",
+                    data=st.session_state.t3_output_data,
+                    file_name=f"{nombre_archivo_t3}.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    key="t3_dl_button"
+                )
+    else:
+        st.info("💡 Por favor, sube el archivo BASE MASIVO (xlsx) para comenzar.")
