@@ -122,11 +122,14 @@ with tab1:
                             cleaned_cliente = []
                             cleaned_telefono = []
                             
+                            # Find the assessor column (handling case and spaces)
+                            asesor_col = next((c for c in df.columns if str(c).strip().upper() == "ASESOR"), None)
+                            
                             # Process and validate
                             for idx, row in df.iterrows():
                                 # Omitir registros si ASESOR es ANULADA
-                                if "ASESOR" in df.columns:
-                                    raw_asesor = row["ASESOR"]
+                                if asesor_col is not None:
+                                    raw_asesor = row[asesor_col]
                                     if not pd.isna(raw_asesor) and str(raw_asesor).strip().upper() == "ANULADA":
                                         anuladas_count += 1
                                         continue
