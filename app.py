@@ -66,6 +66,7 @@ with tab1:
         st.session_state.t1_total_rows = 0
         st.session_state.t1_clean_rows = 0
         st.session_state.t1_anuladas_count = 0
+        st.session_state.t1_anuladas_list = []
         st.session_state.t1_current_file = None
         st.session_state.t1_current_sheet = None
 
@@ -95,6 +96,7 @@ with tab1:
                 st.session_state.t1_total_rows = 0
                 st.session_state.t1_clean_rows = 0
                 st.session_state.t1_anuladas_count = 0
+                st.session_state.t1_anuladas_list = []
                 st.session_state.t1_current_file = file_id
                 st.session_state.t1_current_sheet = sheet_name
             
@@ -115,6 +117,7 @@ with tab1:
                             alerts = []
                             clean_indices = []
                             anuladas_count = 0
+                            anuladas_list = []
                             
                             cleaned_tarjeta = []
                             cleaned_cuenta = []
@@ -132,6 +135,15 @@ with tab1:
                                     raw_asesor = row[asesor_col]
                                     if not pd.isna(raw_asesor) and str(raw_asesor).strip().upper() == "ANULADA":
                                         anuladas_count += 1
+                                        anuladas_list.append({
+                                            "Fila Excel": idx + 2,
+                                            "DNI": str(row.get("DNI", "")).replace(".0", ""),
+                                            "Cliente": str(row.get("CLIENTE", "")),
+                                            "Tarjeta": str(row.get("TARJETA", "")).replace(".0", ""),
+                                            "Cuenta": str(row.get("CUENTA", "")).replace(".0", ""),
+                                            "Teléfono": str(row.get("TELEFONO", "")).replace(".0", ""),
+                                            "Asesor": str(raw_asesor)
+                                        })
                                         continue
                                         
                                 raw_tarjeta = row["TARJETA"]
@@ -243,22 +255,34 @@ with tab1:
                             st.session_state.t1_total_rows = len(df)
                             st.session_state.t1_clean_rows = len(df_clean)
                             st.session_state.t1_anuladas_count = anuladas_count
+                            st.session_state.t1_anuladas_list = anuladas_list
                             st.session_state.t1_processed = True
                 
                 # Render results
                 if st.session_state.t1_processed:
                     st.success("✅ ¡Procesamiento completado con éxito!")
                     
-                    # Metrics
-                    col1, col2, col3, col4 = st.columns(4)
-                    with col1:
-                        st.metric("Total Registros", st.session_state.t1_total_rows)
-                    with col2:
-                        st.metric("Registros Limpios (Cruzaron)", st.session_state.t1_clean_rows)
-                    with col3:
-                        st.metric("Registros Fallidos (No Cruzaron)", len(st.session_state.t1_alerts))
-                    with col4:
-                        st.metric("Registros Anulados (Omitidos)", st.session_state.t1_anuladas_count)
+                    # Premium Metric Cards
+                    st.markdown(f"""
+                        <div style="display: flex; gap: 15px; margin-bottom: 25px; flex-wrap: wrap;">
+                            <div style="flex: 1; min-width: 200px; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); border-left: 5px solid #2196F3; text-align: center;">
+                                <div style="font-size: 0.95rem; font-weight: 600; color: #7F8C8D; text-transform: uppercase; letter-spacing: 0.5px;">Total Registros</div>
+                                <div style="font-size: 2.2rem; font-weight: 800; color: #2C3E50; margin-top: 5px;">{st.session_state.t1_total_rows}</div>
+                            </div>
+                            <div style="flex: 1; min-width: 200px; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); border-left: 5px solid #4CAF50; text-align: center;">
+                                <div style="font-size: 0.95rem; font-weight: 600; color: #7F8C8D; text-transform: uppercase; letter-spacing: 0.5px;">Limpios (Cruzaron)</div>
+                                <div style="font-size: 2.2rem; font-weight: 800; color: #4CAF50; margin-top: 5px;">{st.session_state.t1_clean_rows}</div>
+                            </div>
+                            <div style="flex: 1; min-width: 200px; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); border-left: 5px solid #F44336; text-align: center;">
+                                <div style="font-size: 0.95rem; font-weight: 600; color: #7F8C8D; text-transform: uppercase; letter-spacing: 0.5px;">Fallidos (No Cruzaron)</div>
+                                <div style="font-size: 2.2rem; font-weight: 800; color: #F44336; margin-top: 5px;">{len(st.session_state.t1_alerts)}</div>
+                            </div>
+                            <div style="flex: 1; min-width: 200px; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); border-left: 5px solid #FF9800; text-align: center;">
+                                <div style="font-size: 0.95rem; font-weight: 600; color: #7F8C8D; text-transform: uppercase; letter-spacing: 0.5px;">Anulados (Omitidos)</div>
+                                <div style="font-size: 2.2rem; font-weight: 800; color: #FF9800; margin-top: 5px;">{st.session_state.t1_anuladas_count}</div>
+                            </div>
+                        </div>
+                    """, unsafe_allow_html=True)
                         
                     # Download Buttons
                     st.subheader("📥 Descargar Archivos Generados")
@@ -287,6 +311,14 @@ with tab1:
                         st.dataframe(df_alerts, use_container_width=True)
                     else:
                         st.info("¡Excelente! Todas las filas cruzaron y se limpiaron correctamente.")
+                        
+                    # Display Cancelled Rows (Asesor = ANULADA)
+                    st.subheader("🚫 Reporte de Registros ANULADOS (Omitidos)")
+                    if st.session_state.t1_anuladas_list:
+                        df_anuladas = pd.DataFrame(st.session_state.t1_anuladas_list)
+                        st.dataframe(df_anuladas, use_container_width=True)
+                    else:
+                        st.info("No se encontraron registros anulados por asesor.")
                         
         except Exception as e:
             st.error(f"Error al leer el archivo Excel: {e}")
