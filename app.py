@@ -262,27 +262,16 @@ with tab1:
                 if st.session_state.t1_processed:
                     st.success("✅ ¡Procesamiento completado con éxito!")
                     
-                    # Premium Metric Cards
-                    st.markdown(f"""
-                        <div style="display: flex; gap: 15px; margin-bottom: 25px; flex-wrap: wrap;">
-                            <div style="flex: 1; min-width: 200px; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); border-left: 5px solid #2196F3; text-align: center;">
-                                <div style="font-size: 0.95rem; font-weight: 600; color: #7F8C8D; text-transform: uppercase; letter-spacing: 0.5px;">Total Registros</div>
-                                <div style="font-size: 2.2rem; font-weight: 800; color: #2C3E50; margin-top: 5px;">{st.session_state.t1_total_rows}</div>
-                            </div>
-                            <div style="flex: 1; min-width: 200px; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); border-left: 5px solid #4CAF50; text-align: center;">
-                                <div style="font-size: 0.95rem; font-weight: 600; color: #7F8C8D; text-transform: uppercase; letter-spacing: 0.5px;">Limpios (Cruzaron)</div>
-                                <div style="font-size: 2.2rem; font-weight: 800; color: #4CAF50; margin-top: 5px;">{st.session_state.t1_clean_rows}</div>
-                            </div>
-                            <div style="flex: 1; min-width: 200px; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); border-left: 5px solid #F44336; text-align: center;">
-                                <div style="font-size: 0.95rem; font-weight: 600; color: #7F8C8D; text-transform: uppercase; letter-spacing: 0.5px;">Fallidos (No Cruzaron)</div>
-                                <div style="font-size: 2.2rem; font-weight: 800; color: #F44336; margin-top: 5px;">{len(st.session_state.t1_alerts)}</div>
-                            </div>
-                            <div style="flex: 1; min-width: 200px; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); border-left: 5px solid #FF9800; text-align: center;">
-                                <div style="font-size: 0.95rem; font-weight: 600; color: #7F8C8D; text-transform: uppercase; letter-spacing: 0.5px;">Anulados (Omitidos)</div>
-                                <div style="font-size: 2.2rem; font-weight: 800; color: #FF9800; margin-top: 5px;">{st.session_state.t1_anuladas_count}</div>
-                            </div>
-                        </div>
-                    """, unsafe_allow_html=True)
+                    # Metrics
+                    col1, col2, col3, col4 = st.columns(4)
+                    with col1:
+                        st.metric("Total Registros", st.session_state.t1_total_rows)
+                    with col2:
+                        st.metric("Registros Limpios (Cruzaron)", st.session_state.t1_clean_rows)
+                    with col3:
+                        st.metric("Registros Fallidos (No Cruzaron)", len(st.session_state.t1_alerts))
+                    with col4:
+                        st.metric("Registros Anulados (Omitidos)", st.session_state.t1_anuladas_count)
                         
                     # Download Buttons
                     st.subheader("📥 Descargar Archivos Generados")
