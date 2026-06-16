@@ -182,7 +182,15 @@ def main():
     cleaned_cliente = []
     cleaned_telefono = []
     
+    anuladas_count = 0
     for idx, row in df.iterrows():
+        # Omitir registros si ASESOR es ANULADA
+        if "ASESOR" in df.columns:
+            raw_asesor = row["ASESOR"]
+            if not pd.isna(raw_asesor) and str(raw_asesor).strip().upper() == "ANULADA":
+                anuladas_count += 1
+                continue
+                
         # Get raw values
         raw_tarjeta = row["TARJETA"]
         raw_cuenta = row["CUENTA"]
@@ -307,6 +315,9 @@ def main():
     except Exception as e:
         print(f"Error al guardar subir a predictivo: {e}")
         
+    if anuladas_count > 0:
+        print(f"\nSe omitieron {anuladas_count} registros con ASESOR = 'ANULADA'.")
+
     # Print alerts/errors
     print(f"\n=== REPORTES DE ALERTAS ({len(alerts)} filas no procesadas) ===")
     if alerts:

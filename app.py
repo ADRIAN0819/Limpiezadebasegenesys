@@ -65,6 +65,7 @@ with tab1:
         st.session_state.t1_alerts = []
         st.session_state.t1_total_rows = 0
         st.session_state.t1_clean_rows = 0
+        st.session_state.t1_anuladas_count = 0
         st.session_state.t1_current_file = None
         st.session_state.t1_current_sheet = None
 
@@ -93,6 +94,7 @@ with tab1:
                 st.session_state.t1_alerts = []
                 st.session_state.t1_total_rows = 0
                 st.session_state.t1_clean_rows = 0
+                st.session_state.t1_anuladas_count = 0
                 st.session_state.t1_current_file = file_id
                 st.session_state.t1_current_sheet = sheet_name
             
@@ -112,6 +114,7 @@ with tab1:
                         else:
                             alerts = []
                             clean_indices = []
+                            anuladas_count = 0
                             
                             cleaned_tarjeta = []
                             cleaned_cuenta = []
@@ -121,6 +124,13 @@ with tab1:
                             
                             # Process and validate
                             for idx, row in df.iterrows():
+                                # Omitir registros si ASESOR es ANULADA
+                                if "ASESOR" in df.columns:
+                                    raw_asesor = row["ASESOR"]
+                                    if not pd.isna(raw_asesor) and str(raw_asesor).strip().upper() == "ANULADA":
+                                        anuladas_count += 1
+                                        continue
+                                        
                                 raw_tarjeta = row["TARJETA"]
                                 raw_cuenta = row["CUENTA"]
                                 raw_dni = row["DNI"]
@@ -229,6 +239,7 @@ with tab1:
                             st.session_state.t1_alerts = alerts
                             st.session_state.t1_total_rows = len(df)
                             st.session_state.t1_clean_rows = len(df_clean)
+                            st.session_state.t1_anuladas_count = anuladas_count
                             st.session_state.t1_processed = True
                 
                 # Render results
@@ -236,13 +247,15 @@ with tab1:
                     st.success("✅ ¡Procesamiento completado con éxito!")
                     
                     # Metrics
-                    col1, col2, col3 = st.columns(3)
+                    col1, col2, col3, col4 = st.columns(4)
                     with col1:
                         st.metric("Total Registros", st.session_state.t1_total_rows)
                     with col2:
                         st.metric("Registros Limpios (Cruzaron)", st.session_state.t1_clean_rows)
                     with col3:
                         st.metric("Registros Fallidos (No Cruzaron)", len(st.session_state.t1_alerts))
+                    with col4:
+                        st.metric("Registros Anulados (Omitidos)", st.session_state.t1_anuladas_count)
                         
                     # Download Buttons
                     st.subheader("📥 Descargar Archivos Generados")
