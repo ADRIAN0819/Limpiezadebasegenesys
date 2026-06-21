@@ -35,6 +35,10 @@ def clean_dni(val):
         s = s[:-2]
     s = s.replace(" ", "")
     
+    # Validacion de RUC (11 digitos, empieza con 10, 15, 17 o 20)
+    if len(s) == 11 and s.isdigit() and s[:2] in ["10", "15", "17", "20"]:
+        return s
+    
     # Passports (0X...)
     if s.upper().startswith("0X"):
         return s
