@@ -140,7 +140,13 @@ def main():
     print("Iniciando procesamiento de cruces con reportes y celdas resaltadas...")
     
     script_dir = os.path.dirname(os.path.abspath(__file__))
-    nocruza_path = os.path.join(script_dir, "NOCRUZA.xlsx")
+    # Detect whether to use NOCRUZAHBK.xlsx or NOCRUZA.xlsx
+    hbk_file = os.path.join(script_dir, "NOCRUZAHBK.xlsx")
+    if os.path.exists(hbk_file):
+        nocruza_path = hbk_file
+    else:
+        nocruza_path = os.path.join(script_dir, "NOCRUZA.xlsx")
+        
     basewf_path = os.path.join(script_dir, "BASE WF.xlsx")
     output_corregido_path = os.path.join(script_dir, "devuelto corregido.xlsx")
     output_erroneo_path = os.path.join(script_dir, "registros erroneos.xlsx")
@@ -148,6 +154,16 @@ def main():
     # Load data
     print(f"Leyendo {nocruza_path}...")
     df_no = pd.read_excel(nocruza_path)
+    
+    # Rename columns to standard ones to support both NOCRUZA (Banca Móvil) and NOCRUZAHBK formats
+    rename_map = {
+        'REGLA': 'Regla',
+        'FECHA_TRANSACCION': 'FechaTransaccion',
+        'HORA_TRANSACCION': 'HoraTransaccion',
+        'NRO_TARJETA': 'NroTarjeta',
+        'CTA_ORIGEN': 'NroCuenta'
+    }
+    df_no = df_no.rename(columns=rename_map)
     
     print(f"Leyendo {basewf_path} (hoja 'REGISTROS WEBFORM')...")
     df_base = pd.read_excel(basewf_path, sheet_name="REGISTROS WEBFORM")

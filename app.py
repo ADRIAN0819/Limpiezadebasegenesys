@@ -1081,6 +1081,17 @@ with tab4:
                         logs = []
                         # Load data
                         df_no = pd.read_excel(uploaded_nocruza)
+                        
+                        # Rename columns to standard ones to support both NOCRUZA (Banca Móvil) and NOCRUZAHBK formats
+                        rename_map = {
+                            'REGLA': 'Regla',
+                            'FECHA_TRANSACCION': 'FechaTransaccion',
+                            'HORA_TRANSACCION': 'HoraTransaccion',
+                            'NRO_TARJETA': 'NroTarjeta',
+                            'CTA_ORIGEN': 'NroCuenta'
+                        }
+                        df_no = df_no.rename(columns=rename_map)
+                        
                         df_base = pd.read_excel(uploaded_basewf, sheet_name="REGISTROS WEBFORM")
                         
                         # Standarize accounts for matching (lstrip '0' to match both '04754518397' and '4754518397')

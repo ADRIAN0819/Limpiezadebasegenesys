@@ -42,14 +42,31 @@ def generar_base_cruce():
         df_pend_temp = pd.read_excel(ruta_pend_llenar, dtype=str)
         df_datos = pd.read_excel(ruta_datos, dtype=str)
         
-        df_pend_temp['BASE FINAL[TARJETA]'] = df_pend_temp['BASE FINAL[TARJETA]'].astype(str).str.replace(r'\.0$', '', regex=True)
-        df_datos['BASE FINAL[TARJETA]'] = df_datos['BASE FINAL[TARJETA]'].astype(str).str.replace(r'\.0$', '', regex=True)
-        df_datos_unica = df_datos.drop_duplicates(subset=['BASE FINAL[TARJETA]'], keep='first')
+        # Separar filas VRM y no-VRM en df_pend_temp
+        df_pend_temp['BASE FINAL[REGLA]'] = df_pend_temp['BASE FINAL[REGLA]'].fillna('').astype(str).str.strip()
+        df_pend_vrm = df_pend_temp[df_pend_temp['BASE FINAL[REGLA]'] == 'VRM'].copy()
+        df_pend_non_vrm = df_pend_temp[df_pend_temp['BASE FINAL[REGLA]'] != 'VRM'].copy()
         
-        columnas_extraer = ['BASE FINAL[TARJETA]', 'TELEFONO', 'DNI', 'CUENTA', 'TARJETA', 'CLIENTE']
-        df_datos_unica = df_datos_unica[columnas_extraer]
+        # 1. Procesamiento para VRM (Cruce por TARJETA)
+        df_pend_vrm['BASE FINAL[TARJETA]'] = df_pend_vrm['BASE FINAL[TARJETA]'].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
+        df_datos_vrm = df_datos.copy()
+        df_datos_vrm['BASE FINAL[TARJETA]'] = df_datos_vrm['BASE FINAL[TARJETA]'].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
+        df_datos_unica_vrm = df_datos_vrm.drop_duplicates(subset=['BASE FINAL[TARJETA]'], keep='first')
+        columnas_vrm = ['BASE FINAL[TARJETA]', 'TELEFONO', 'DNI', 'CUENTA', 'TARJETA', 'CLIENTE']
+        df_datos_unica_vrm = df_datos_unica_vrm[columnas_vrm]
+        df_res_vrm = pd.merge(df_pend_vrm, df_datos_unica_vrm, on='BASE FINAL[TARJETA]', how='left', suffixes=('', '_datos'))
         
-        df_resultado = pd.merge(df_pend_temp, df_datos_unica, on='BASE FINAL[TARJETA]', how='left', suffixes=('', '_datos'))
+        # 2. Procesamiento para no-VRM (Cruce por ID)
+        df_pend_non_vrm['BASE FINAL[ID]'] = df_pend_non_vrm['BASE FINAL[ID]'].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
+        df_datos_non_vrm = df_datos.copy()
+        df_datos_non_vrm['BASE FINAL[ID]'] = df_datos_non_vrm['BASE FINAL[ID]'].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
+        df_datos_unica_non_vrm = df_datos_non_vrm.drop_duplicates(subset=['BASE FINAL[ID]'], keep='first')
+        columnas_non_vrm = ['BASE FINAL[ID]', 'TELEFONO', 'DNI', 'CUENTA', 'TARJETA', 'CLIENTE']
+        df_datos_unica_non_vrm = df_datos_unica_non_vrm[columnas_non_vrm]
+        df_res_non_vrm = pd.merge(df_pend_non_vrm, df_datos_unica_non_vrm, on='BASE FINAL[ID]', how='left', suffixes=('', '_datos'))
+        
+        # Concatenar resultados
+        df_resultado = pd.concat([df_res_vrm, df_res_non_vrm], ignore_index=True)
         
         df_resultado['BASE FINAL[BASE WF.CELULAR/TELEFONO]'] = df_resultado['TELEFONO'].combine_first(df_resultado['BASE FINAL[BASE WF.CELULAR/TELEFONO]'])
         df_resultado['BASE FINAL[BASE WF.DNI]'] = df_resultado['DNI'].combine_first(df_resultado['BASE FINAL[BASE WF.DNI]'])
