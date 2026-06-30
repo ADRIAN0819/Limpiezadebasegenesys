@@ -550,7 +550,9 @@ with tab2:
                             'Default Wrap-up Code': 'Cliente no contesta',
                             'ININ-OUTBOUND-AMBIGUOUS': 'Cliente no contesta',
                             'ININ-OUTBOUND-INTERNAL-ERROR-SKIPPED': 'Cliente no contesta',
-                            'ININ-OUTBOUND-SIT-UNCALLABLE': 'Cliente no contesta'
+                            'ININ-OUTBOUND-SIT-UNCALLABLE': 'Cliente no contesta',
+                            'ININ-OUTBOUND-MACHINE': 'Cliente no contesta',
+                            'ININ-WRAP-UP-TIMEOUT': 'Cliente no contesta'
                         }
                         df_lista['nivel de respuesta'] = df_lista['CallRecordLastResult-TELEFONO'].map(mapa_resp).fillna("")
                         
