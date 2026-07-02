@@ -615,7 +615,9 @@ with tab2:
                         mapa_gestor = {
                             'ZLAO': 'DAVID JOSUE ZAMBRANO LEON',
                             'AG0008 David Zambrano': 'DAVID JOSUE ZAMBRANO LEON',
+                            'AG0018 ELIANA MIRANDA': 'ELIANA ESTELA MIRANDA POMACONDOR',
                             'AG0024 Antonia Montoya': 'ANTONIA MONTOYA HUAMANI',
+                            'AG0030 TANIA GUERRERO': 'TANIA LISSET GUERRERO ROMERO',
                             'AG0108 MIGUEL NAVARRO': 'MIGUEL ANGEL NAVARRO SALAZAR',
                             'AG0124 TERESA CABANILLAS': 'TERESA DEL CARMEN CABANILLAS JAVIER',
                             'AG0126 JOSUE OLAYA': 'JOSUE MANUEL OLAYA DOMÍNGUEZ',
@@ -625,9 +627,11 @@ with tab2:
                             'AG0142 Sandra Serrano': 'SANDRA SERRANO MOLINA',
                             'AG0151 YOSEP SANGAY': 'YOSEP SANGAY VEGA',
                             'AG0152 VALERIA ESPINOZA': 'VALERIA BELEN ESPINOZA DIAZ',
+                            'AG0173 JHONATAN MENDOZA': 'JHONATAN ENRIQUE MENDOZA CHAVEZ',
                             'AG0176 MAURICIO SALCEDO': 'MAURICIO EDSON SALCEDO ENRIQUEZ',
                             'AG0197 Lizbeth Chavez': 'LIZBETH CHAVEZ TORRES',
                             'AG0215 ROSARIO HUATUCO': 'ROSARIO DEL PILAR HUATUCO QUISPE',
+                            'AG0229 NEFTALI SUYURI': 'NEFTALI AARON SUYURI SUYURI',
                             'AG0263 DERECK MINAYA': 'DERECK ENRIQUE MINAYA CHU'
                         }
                         
