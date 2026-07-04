@@ -98,7 +98,12 @@ def generar_base_cruce():
             df_lista[col] = df_lista[col].astype(str).str.replace('"', '', regex=False)
         print("MUESTRA LIMPIA:", df_lista['TELEFONO'].iloc[0])
                 
-    df_interacc = pd.read_csv(ruta_interacc, sep=';', dtype=str)
+    try:
+        df_interacc = pd.read_csv(ruta_interacc, sep=';', dtype=str)
+        if len(df_interacc.columns) <= 1:
+            raise ValueError("Separador incorrecto")
+    except Exception:
+        df_interacc = pd.read_csv(ruta_interacc, sep=',', dtype=str)
 
     print("Procesando llaves...")
     # Limpiar na de las listas

@@ -136,16 +136,43 @@ def calculate_key_L(row):
         cuenta_pad = cuenta if len(cuenta) == 11 else f"0{cuenta}"
         return f"{cuenta_pad}{val_an}{canal}"
 
+def normalize_column_names(df):
+    rename_map = {}
+    for col in df.columns:
+        col_str = str(col).strip()
+        # Normalize text by removing common accents & encoding variants
+        norm = col_str.upper()
+        norm = norm.replace('Ó', 'O').replace('Í', 'I').replace('Á', 'A').replace('É', 'E').replace('Ú', 'U')
+        norm = norm.replace('\xD3', 'O').replace('\xCD', 'I').replace('\xC1', 'A').replace('\xC9', 'E').replace('\xDA', 'U')
+        
+        if 'TIPO DE GEST' in norm:
+            rename_map[col] = 'TIPO DE GESTIÓN'
+        elif 'GESTI' in norm and 'MOTIVO' in norm:
+            rename_map[col] = 'GESTIÓN MOTIVO'
+        elif 'GESTI' in norm:
+            rename_map[col] = 'GESTIÓN'
+        elif 'APLIC' in norm:
+            rename_map[col] = 'APLICACIÓN'
+            
+    return df.rename(columns=rename_map)
+
 def main():
     print("Iniciando procesamiento de cruces con reportes y celdas resaltadas...")
     
     script_dir = os.path.dirname(os.path.abspath(__file__))
-    # Detect whether to use NOCRUZAHBK.xlsx or NOCRUZA.xlsx
+    # Detect whether to use NOCRUZAHBK.xlsx or NOCRUZA.xlsx (choose the most recently modified one if both exist)
     hbk_file = os.path.join(script_dir, "NOCRUZAHBK.xlsx")
-    if os.path.exists(hbk_file):
+    normal_file = os.path.join(script_dir, "NOCRUZA.xlsx")
+    
+    if os.path.exists(hbk_file) and os.path.exists(normal_file):
+        if os.path.getmtime(hbk_file) > os.path.getmtime(normal_file):
+            nocruza_path = hbk_file
+        else:
+            nocruza_path = normal_file
+    elif os.path.exists(hbk_file):
         nocruza_path = hbk_file
     else:
-        nocruza_path = os.path.join(script_dir, "NOCRUZA.xlsx")
+        nocruza_path = normal_file
         
     basewf_path = os.path.join(script_dir, "BASE WF.xlsx")
     output_corregido_path = os.path.join(script_dir, "devuelto corregido.xlsx")
@@ -161,12 +188,30 @@ def main():
         'FECHA_TRANSACCION': 'FechaTransaccion',
         'HORA_TRANSACCION': 'HoraTransaccion',
         'NRO_TARJETA': 'NroTarjeta',
-        'CTA_ORIGEN': 'NroCuenta'
+        'CTA_ORIGEN': 'NroCuenta',
+        'ImporteTransaccion': 'MONTO_TRANSACCION'
     }
     df_no = df_no.rename(columns=rename_map)
     
-    print(f"Leyendo {basewf_path} (hoja 'REGISTROS WEBFORM')...")
-    df_base = pd.read_excel(basewf_path, sheet_name="REGISTROS WEBFORM")
+    print(f"Leyendo {basewf_path}...")
+    xl = pd.ExcelFile(basewf_path)
+    if "REGISTROS WEBFORM" in xl.sheet_names:
+        df_base = pd.read_excel(basewf_path, sheet_name="REGISTROS WEBFORM")
+    else:
+        dfs = []
+        for s in xl.sheet_names:
+            if s.upper() in ["BASE OUT", "BASE IN", "OUTBOUND", "INBOUND"]:
+                df_s = pd.read_excel(basewf_path, sheet_name=s)
+                dfs.append(df_s)
+        if len(dfs) > 0:
+            df_base = pd.concat(dfs, ignore_index=True)
+        else:
+            raise ValueError(f"No se encontraron hojas válidas de base en {basewf_path}")
+            
+    df_base = normalize_column_names(df_base)
+    
+    if 'L' not in df_base.columns:
+        df_base['L'] = ""
     
     # Standarize accounts for matching (lstrip '0' to match both '04754518397' and '4754518397')
     df_base['CUENTA_str'] = df_base['CUENTA EMISORA'].astype(str).str.strip().str.replace(r'\.0$', '', regex=True).str.lstrip('0')
@@ -194,35 +239,63 @@ def main():
             
         no_card = str(row['NroTarjeta']).strip()
         
-        # Rank candidates to find the correct one
-        best_candidate_idx = None
-        best_score = -1
+        # Rank candidates to find the correct one(s)
+        candidate_scores = []
         
         for midx, mrow in candidates.iterrows():
             com = str(mrow['COMUNICACION 1'])
             score = 0
             
+            # 1. Match time
             if no_time in com:
                 score += 10
             elif no_time[:5] in com:
                 score += 5
+                
+            # 2. Match date
             if no_date in com:
                 score += 5
             formatted_date_slash = pd.to_datetime(no_date).strftime('%d/%m/%Y')
             if formatted_date_slash in com:
                 score += 5
+                
+            # 3. Match base time
             base_time = str(mrow['HORA DE EVENTO']).strip()
+            if len(base_time) > 5:
+                base_time = base_time[:5]
+            if len(base_time) == 4 and ':' in base_time:
+                base_time = base_time.zfill(5)
             if base_time == no_time[:5]:
                 score += 3
+                
+            # 4. Match base date
             base_date = str(mrow['DIA DE EVENTO']).strip()
             if base_date.startswith(no_date):
                 score += 2
                 
-            if score > best_score:
-                best_score = score
-                best_candidate_idx = midx
-                
-        if best_candidate_idx is not None:
+            # 5. Match transaction amount
+            no_monto = row.get('MONTO_TRANSACCION')
+            if pd.notna(no_monto):
+                try:
+                    monto_val = float(no_monto)
+                    monto_int = int(monto_val)
+                    if f"{monto_int}" in com or f"{monto_val:.2f}" in com:
+                        score += 15
+                except:
+                    pass
+            
+            candidate_scores.append((midx, score))
+            
+        if not candidate_scores:
+            continue
+            
+        # Find maximum score
+        max_score = max(score for midx, score in candidate_scores)
+        
+        # Correct ALL candidates that tie for the highest score
+        best_candidates = [midx for midx, score in candidate_scores if score == max_score]
+        
+        for best_candidate_idx in best_candidates:
             orig_row = df_base.loc[best_candidate_idx].copy()
             corrected_row = orig_row.copy()
             
@@ -292,7 +365,9 @@ def main():
                 print(f"F{idx:<3} | {acc:<10} | DIA DE EVENTO   | {orig_date:<20} | {correct_date:<20}")
                 
             # 4. Correct KEY 'L' using the Excel logic
-            orig_key = str(orig_row['L']).strip()
+            orig_key = str(orig_row.get('L', '')).strip()
+            if pd.isna(orig_row.get('L')):
+                orig_key = ""
             new_key = calculate_key_L(corrected_row)
             corrected_row['L'] = new_key
             if orig_key != new_key:
@@ -400,20 +475,29 @@ def main():
             pd.DataFrame(columns=['FECHA DE OPERACION', 'CANAL', 'TJ / CTA / DNI', 'ASESOR ( SEGUN WF)', 'SUPERVISOR', 'OBS', 'COMENTARIO ANALISTA']).to_excel(writer, sheet_name="Resumen Errores", index=False)
             
     # Save Corrected Records split by TIPO DE GESTIÓN
-    df_corrected = pd.DataFrame(corrected_rows)
-    
-    # Format CUENTA EMISORA to ensure leading zero for 10-digit accounts
-    if len(df_corrected) > 0 and 'CUENTA EMISORA' in df_corrected.columns:
-        df_corrected['CUENTA EMISORA'] = df_corrected['CUENTA EMISORA'].apply(
-            lambda x: f"0{str(x).strip().split('.')[0]}" if pd.notna(x) and str(x).strip().split('.')[0].isdigit() and len(str(x).strip().split('.')[0]) == 10 else x
-        )
+    if len(corrected_rows) > 0:
+        df_corrected = pd.DataFrame(corrected_rows)
         
-    df_corrected_unique = df_corrected.drop_duplicates()
-    
-    # Separate OUTBOUND and INBOUND
-    df_outbound = df_corrected_unique[df_corrected_unique['TIPO DE GESTIÓN'].astype(str).str.upper().str.contains('OUT')]
-    df_inbound = df_corrected_unique[df_corrected_unique['TIPO DE GESTIÓN'].astype(str).str.upper().str.contains('IN')]
-    
+        # Format CUENTA EMISORA to ensure leading zero for 10-digit accounts
+        if 'CUENTA EMISORA' in df_corrected.columns:
+            df_corrected['CUENTA EMISORA'] = df_corrected['CUENTA EMISORA'].apply(
+                lambda x: f"0{str(x).strip().split('.')[0]}" if pd.notna(x) and str(x).strip().split('.')[0].isdigit() and len(str(x).strip().split('.')[0]) == 10 else x
+            )
+            
+        df_corrected_unique = df_corrected.drop_duplicates()
+        
+        # Separate OUTBOUND and INBOUND
+        if 'TIPO DE GESTIÓN' in df_corrected_unique.columns:
+            df_outbound = df_corrected_unique[df_corrected_unique['TIPO DE GESTIÓN'].astype(str).str.upper().str.contains('OUT')]
+            df_inbound = df_corrected_unique[df_corrected_unique['TIPO DE GESTIÓN'].astype(str).str.upper().str.contains('IN')]
+        else:
+            df_outbound = pd.DataFrame()
+            df_inbound = pd.DataFrame()
+    else:
+        df_corrected_unique = pd.DataFrame()
+        df_outbound = pd.DataFrame()
+        df_inbound = pd.DataFrame()
+        
     print(f"Guardando {len(df_corrected_unique)} registros corregidos (OUTBOUND: {len(df_outbound)}, INBOUND: {len(df_inbound)}) en {output_corregido_path}...")
     with pd.ExcelWriter(output_corregido_path) as writer:
         df_outbound.to_excel(writer, sheet_name="OUTBOUND", index=False)
