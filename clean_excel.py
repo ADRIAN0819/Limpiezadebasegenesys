@@ -194,7 +194,7 @@ def main():
         # Omitir registros si ASESOR es ANULADA
         if asesor_col is not None:
             raw_asesor = row[asesor_col]
-            if not pd.isna(raw_asesor) and str(raw_asesor).strip().upper() == "ANULADA":
+            if not pd.isna(raw_asesor) and str(raw_asesor).strip().upper() in ["ANULADA", "NO EXISTE"]:
                 anuladas_count += 1
                 continue
                 
@@ -323,7 +323,7 @@ def main():
         print(f"Error al guardar subir a predictivo: {e}")
         
     if anuladas_count > 0:
-        print(f"\nSe omitieron {anuladas_count} registros con ASESOR = 'ANULADA'.")
+        print(f"\nSe omitieron {anuladas_count} registros con ASESOR = 'ANULADA' o 'NO EXISTE'.")
 
     # Print alerts/errors
     print(f"\n=== REPORTES DE ALERTAS ({len(alerts)} filas no procesadas) ===")

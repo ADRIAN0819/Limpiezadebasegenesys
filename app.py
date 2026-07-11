@@ -134,7 +134,7 @@ with tab1:
                                 # Omitir registros si ASESOR es ANULADA
                                 if asesor_col is not None:
                                     raw_asesor = row[asesor_col]
-                                    if not pd.isna(raw_asesor) and str(raw_asesor).strip().upper() == "ANULADA":
+                                    if not pd.isna(raw_asesor) and str(raw_asesor).strip().upper() in ["ANULADA", "NO EXISTE"]:
                                         anuladas_count += 1
                                         anuladas_list.append({
                                             "Fila Excel": idx + 2,
@@ -272,7 +272,7 @@ with tab1:
                     with col3:
                         st.metric("Registros Fallidos (No Cruzaron)", len(st.session_state.t1_alerts))
                     with col4:
-                        st.metric("Registros Anulados (Omitidos)", st.session_state.t1_anuladas_count)
+                        st.metric("Reg. Anulados/No Existe (Omitidos)", st.session_state.t1_anuladas_count)
                         
                     # Download Buttons
                     st.subheader("📥 Descargar Archivos Generados")
@@ -302,13 +302,13 @@ with tab1:
                     else:
                         st.info("¡Excelente! Todas las filas cruzaron y se limpiaron correctamente.")
                         
-                    # Display Cancelled Rows (Asesor = ANULADA)
-                    st.subheader("🚫 Reporte de Registros ANULADOS (Omitidos)")
+                    # Display Cancelled Rows (Asesor = ANULADA or NO EXISTE)
+                    st.subheader("🚫 Reporte de Registros ANULADOS / NO EXISTE (Omitidos)")
                     if st.session_state.t1_anuladas_list:
                         df_anuladas = pd.DataFrame(st.session_state.t1_anuladas_list)
                         st.dataframe(df_anuladas, use_container_width=True)
                     else:
-                        st.info("No se encontraron registros anulados por asesor.")
+                        st.info("No se encontraron registros anulados o que no existen por asesor.")
                         
         except Exception as e:
             st.error(f"Error al leer el archivo Excel: {e}")
