@@ -307,7 +307,7 @@ def main():
             expected_canal = orig_row['CANAL']
             if 'BM' in regla_no:
                 expected_canal = "BM - Banca Móvil (App)"
-            elif 'HBK' in regla_no:
+            elif 'HBK' in regla_no or 'HHA' in regla_no or 'HCS' in regla_no:
                 expected_canal = "INT-HBK - Multired Virtual (HBK)"
             elif 'VRM' in regla_no:
                 expected_canal = "VRM - VISA (TMGDV)"
