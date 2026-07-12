@@ -51,7 +51,7 @@ st.markdown("""
 st.title("🧼 Sistema de Gestión de Bases de Fraude Genesys")
 st.markdown("Plataforma interactiva para limpieza de bases y cruce de datos del Predictivo.")
 
-tab1, tab2, tab3, tab4 = st.tabs(["🧼 Limpieza de Base (Excel)", "🔀 Generar Base de Cruce (Predictivo)", "📋 Generar Plantilla (Masivo)", "🔧 Corrección de Cruces"])
+tab1, tab2, tab3, tab4, tab5 = st.tabs(["🧼 Limpieza de Base (Excel)", "🔀 Generar Base de Cruce (Predictivo)", "📋 Generar Plantilla (Masivo)", "🔧 Corrección de Cruces", "📋 Generar FAG Masivo (Anuladas/No Existe)"])
 
 # ================= TAB 1: LIMPIEZA DE BASE =================
 with tab1:
@@ -1470,3 +1470,281 @@ with tab4:
                 st.code("\n".join(st.session_state.t4_logs), language="text")
     else:
         st.info("💡 Sube ambos archivos obligatorios arriba para habilitar la corrección de cruces.")
+
+# ================= TAB 5: GENERAR FAG MASIVO (ANULADAS / NO EXISTE) =================
+with tab5:
+    st.header("📋 Generar Plantilla FAG Masivo (Anuladas/No Existe)")
+    st.markdown("Genera el archivo FAG Masivo filtrando registros con ASESOR = 'ANULADA' o 'NO EXISTE' a partir de una hoja de gestión.")
+
+    if "t5_processed" not in st.session_state:
+        st.session_state.t5_processed = False
+        st.session_state.t5_output_data = None
+        st.session_state.t5_total_rows = 0
+        st.session_state.t5_current_file = None
+        st.session_state.t5_current_sheet = None
+
+    uploaded_fag_file = st.file_uploader("Sube el archivo Excel de gestión (.xlsx)", type=["xlsx"], key="t5_uploader")
+
+    if uploaded_fag_file is not None:
+        try:
+            wb_check_t5 = openpyxl.load_workbook(uploaded_fag_file, read_only=True)
+            sheets_t5 = wb_check_t5.sheetnames
+            
+            default_sheet_t5 = next((s for s in sheets_t5 if "LLENAR DATOS" in s.upper().replace("/", "")), sheets_t5[0])
+            
+            sheet_name_t5 = st.selectbox(
+                "Selecciona la hoja a procesar",
+                options=sheets_t5,
+                index=sheets_t5.index(default_sheet_t5) if default_sheet_t5 in sheets_t5 else 0,
+                key="t5_sheet_select"
+            )
+            
+            # Reset if file or sheet changes
+            fag_file_id = uploaded_fag_file.name
+            if st.session_state.t5_current_file != fag_file_id or st.session_state.t5_current_sheet != sheet_name_t5:
+                st.session_state.t5_processed = False
+                st.session_state.t5_output_data = None
+                st.session_state.t5_total_rows = 0
+                st.session_state.t5_current_file = fag_file_id
+                st.session_state.t5_current_sheet = sheet_name_t5
+
+            st.subheader("Configuración de Plantilla FAG")
+            col_t5_1, col_t5_2 = st.columns(2)
+            
+            now_t5 = datetime.datetime.now()
+            default_fecha_t5 = now_t5.strftime("%d/%m/%Y")
+            default_hora_t5 = now_t5.strftime("%H:%M:%S")
+
+            with col_t5_1:
+                fecha_val_t5 = st.text_input("Ingresa la FECHA (DD/MM/AAAA):", value=default_fecha_t5, key="t5_fecha")
+                hora_val_t5 = st.text_input("Ingresa la HORA (HH:MM:SS):", value=default_hora_t5, key="t5_hora")
+            with col_t5_2:
+                comunicacion_val_t5 = st.text_input("Ingresa el valor de COMUNICACION 1:", value="FAG - TARJETA ANULADA", key="t5_comunicacion")
+                nombre_archivo_t5 = st.text_input("Nombre para el archivo final (sin extensión):", value="FAG_MASIVO", key="t5_nombre_final")
+
+            if st.button("Generar Plantilla FAG Masiva", key="t5_process_btn") or st.session_state.t5_processed:
+                if not st.session_state.t5_processed:
+                    with st.spinner("Procesando y generando plantilla FAG..."):
+                        try:
+                            # Read uploaded file
+                            uploaded_fag_file.seek(0)
+                            df_t5 = pd.read_excel(uploaded_fag_file, sheet_name=sheet_name_t5)
+                            
+                            # Normalize columns to uppercase
+                            df_t5.columns = [str(c).strip().upper() for c in df_t5.columns]
+                            
+                            asesor_col_t5 = next((c for c in df_t5.columns if "ASESOR" in c), None)
+                            if not asesor_col_t5:
+                                st.error("❌ Error: No se encontró la columna ASESOR en la hoja seleccionada.")
+                            else:
+                                # Filter rows
+                                filtered_rows_t5 = []
+                                for idx, row in df_t5.iterrows():
+                                    raw_asesor = row[asesor_col_t5]
+                                    if pd.notna(raw_asesor):
+                                        asesor_str = str(raw_asesor).strip().upper()
+                                        if asesor_str in ["ANULADA", "NO EXISTE"]:
+                                            filtered_rows_t5.append((row, asesor_str))
+
+                                if not filtered_rows_t5:
+                                    st.warning("⚠️ No se encontraron registros con ASESOR = 'ANULADA' o 'NO EXISTE'.")
+                                else:
+                                    # Load model or create new workbook
+                                    import io
+                                    
+                                    model_path_t5 = "LIMPIAR/FAG SUBIDA MODELO.xlsx"
+                                    if os.path.exists(model_path_t5):
+                                        wb_out_t5 = openpyxl.load_workbook(model_path_t5)
+                                        ws_out_t5 = wb_out_t5.active
+                                        if ws_out_t5.max_row > 1:
+                                            ws_out_t5.delete_rows(2, ws_out_t5.max_row)
+                                    else:
+                                        wb_out_t5 = openpyxl.Workbook()
+                                        ws_out_t5 = wb_out_t5.active
+                                        ws_out_t5.title = "REGISTROS WEBFORM"
+                                        
+                                    output_columns_t5 = [
+                                        "EXPEDIENTE", "FECHA", "HORA", "TIPO DE GESTIÓN", "GESTIÓN", "GESTIÓN MOTIVO",
+                                        "FECHA Y HORA DE ALERTA", "FECHA Y HORA DE ATENCION", "Of. Banco de la Nación",
+                                        "Anexo Interno", "Nombre Funcionario BN", "CELULAR/TELEFONO", "DNI",
+                                        "NOMBRE DEL CLIENTE", "CORREO", "CUENTA EMISORA", "CUENTA RECEPTORA",
+                                        "CUENTA RECEPTORA 2", "CUENTA RECEPTORA 3", "NRO. GIRO 1", "NRO. GIRO 2",
+                                        "NRO. GIRO 3", "NRO. GIRO 4", "NRO. GIRO 5", "TARJETA", "N° BLQ",
+                                        "FECHA(BLQ_VIG)", "CANAL", "REGLA MONITOREO", "REGLA O PARAMETRO DE BLOQUEO",
+                                        "SITUACION_BDUC", "CALIFICACION", "OPCION CALIFICACION",
+                                        "FECHA Y HORA DE ENVIO DE CORREO", "IMPORTE DE FRAUDE", "GESTOR", "COMENTARIO",
+                                        "DIA DE EVENTO", "HORA DE EVENTO", "TIEMPO DE DURACION", "G2",
+                                        "FALLECIMIENTO (SI/NO)", "APLICACIÓN", "Columna2", "Columna3",
+                                        "RESULTADO DE LLAMADA", "NIVEL DE RESPUESTA", "MOTIVO DE ATENCION",
+                                        "VALIDACION DE IDENTIDAD", "TIPO DE TRANSACCION", "IMPORTE RECUPERADO",
+                                        "NUMERO DE RECLAMO", "TIPO DE FRAUDE", "VIGILANCIA DE CUENTA",
+                                        "LEVANTAMIENTO VIGILANCIA", "SOLUCION DE CASO", "FECHA Y HORA BLOQUEO",
+                                        "FECHA Y HORA DESBLOQUEO", "COMUNICACION 1", "COMUNICACION 2",
+                                        "COMUNICACION 3", "FECHA MODIFICACION", "MATERIALIZACION DE FRAUDE",
+                                        "SALDO DISPONIBLE", "TIPO DE CUENTA", "CONCLUSION", "FECHA BLOQUEO DE TARJETA"
+                                    ]
+
+                                    if not os.path.exists(model_path_t5):
+                                        for col_num, col_name in enumerate(output_columns_t5, start=1):
+                                            ws_out_t5.cell(row=1, column=col_num, value=col_name)
+
+                                    def get_col_val_t5(row, possible_names):
+                                        for name in possible_names:
+                                            if name in df_t5.columns:
+                                                val = row[name]
+                                                if pd.notna(val):
+                                                    return str(val).strip()
+                                        return None
+
+                                    def clean_val_t5(v):
+                                        if v is None or pd.isna(v):
+                                            return "-"
+                                        s = str(v).strip()
+                                        if s.endswith('.0'):
+                                            s = s[:-2]
+                                        return s if s else "-"
+
+                                    def format_hora_t5(h):
+                                        if not h or pd.isna(h):
+                                            return "-"
+                                        s = str(h).strip()
+                                        if "|" in s:
+                                            s = s.split("|")[0].strip()
+                                        match = re.match(r"(\d{1,2}:\d{2})", s)
+                                        if match:
+                                            return match.group(1)
+                                        return s[:5] if len(s) >= 5 else s
+
+                                    row_out_t5 = 2
+                                    for row, asesor_str in filtered_rows_t5:
+                                        dni = clean_val_t5(get_col_val_t5(row, ["DNI"]))
+                                        nombre = clean_val_t5(get_col_val_t5(row, ["CLIENTE", "NOMBRE DEL CLIENTE", "BASE FINAL[BASE WF.NOMBRE DEL CLIENTE]"]))
+                                        cuenta = clean_val_t5(get_col_val_t5(row, ["CUENTA", "CUENTA EMISORA", "BASE FINAL[BASE WF.CUENTA]"]))
+                                        tarjeta = clean_val_t5(get_col_val_t5(row, ["TARJETA", "BASE FINAL[TARJETA]"]))
+                                        fechatrx = clean_val_t5(get_col_val_t5(row, ["BASE FINAL[FECHATRX]", "FECHATRX", "DIA DE EVENTO"]))
+                                        horatrx_raw = get_col_val_t5(row, ["BASE FINAL[HORATRX]", "HORATRX", "HORA DE EVENTO"])
+                                        celular = clean_val_t5(get_col_val_t5(row, ["TELEFONO", "CELULAR", "CELULAR/TELEFONO", "BASE FINAL[BASE WF.CELULAR/TELEFONO]"]))
+
+                                        canal = "-"
+                                        first_col_name = df_t5.columns[0]
+                                        first_val = row[first_col_name]
+                                        if pd.notna(first_val):
+                                            first_val_str = str(first_val).strip()
+                                            if len(first_val_str) > 26:
+                                                canal = first_val_str[26:]
+                                        if canal == "-":
+                                            canal_val = get_col_val_t5(row, ["BASE FINAL[REGLA]", "REGLA MONITOREO", "CANAL"])
+                                            if canal_val:
+                                                canal = canal_val
+
+                                        hora_evento = format_hora_t5(horatrx_raw)
+
+                                        # Determinar comentario
+                                        if asesor_str == "ANULADA":
+                                            comentario_val = "FAG- TJ ANULADA"
+                                        else:
+                                            comentario_val = "FAG-TJ NO EXISTE"
+
+                                        row_data = {
+                                            "EXPEDIENTE": "",
+                                            "FECHA": fecha_val_t5,
+                                            "HORA": hora_val_t5,
+                                            "TIPO DE GESTIÓN": "Outbound",
+                                            "GESTIÓN": "Call Out Monitoreo",
+                                            "GESTIÓN MOTIVO": "",
+                                            "FECHA Y HORA DE ALERTA": "",
+                                            "FECHA Y HORA DE ATENCION": "",
+                                            "Of. Banco de la Nación": "",
+                                            "Anexo Interno": "",
+                                            "Nombre Funcionario BN": "",
+                                            "CELULAR/TELEFONO": celular,
+                                            "DNI": dni,
+                                            "NOMBRE DEL CLIENTE": nombre,
+                                            "CORREO": "",
+                                            "CUENTA EMISORA": cuenta,
+                                            "CUENTA RECEPTORA": "",
+                                            "CUENTA RECEPTORA 2": "",
+                                            "CUENTA RECEPTORA 3": "",
+                                            "NRO. GIRO 1": "",
+                                            "NRO. GIRO 2": "",
+                                            "NRO. GIRO 3": "",
+                                            "NRO. GIRO 4": "",
+                                            "NRO. GIRO 5": "",
+                                            "TARJETA": tarjeta,
+                                            "N° BLQ": "",
+                                            "FECHA(BLQ_VIG)": "",
+                                            "CANAL": canal,
+                                            "REGLA MONITOREO": "",
+                                            "REGLA O PARAMETRO DE BLOQUEO": "",
+                                            "SITUACION_BDUC": "ACTUALIZADO",
+                                            "CALIFICACION": "FAG - Fraude por análisis del gestor",
+                                            "OPCION CALIFICACION": "",
+                                            "FECHA Y HORA DE ENVIO DE CORREO": "",
+                                            "IMPORTE DE FRAUDE": "",
+                                            "GESTOR": "DAVID JOSUE ZAMBRANO LEON",
+                                            "COMENTARIO": comentario_val,
+                                            "DIA DE EVENTO": fechatrx,
+                                            "HORA DE EVENTO": hora_evento,
+                                            "TIEMPO DE DURACION": "Activa",
+                                            "G2": "",
+                                            "FALLECIMIENTO (SI/NO)": "NO",
+                                            "APLICACIÓN": "",
+                                            "Columna2": "",
+                                            "Columna3": "",
+                                            "RESULTADO DE LLAMADA": "No Contactado",
+                                            "NIVEL DE RESPUESTA": "Cliente no contesta",
+                                            "MOTIVO DE ATENCION": "",
+                                            "VALIDACION DE IDENTIDAD": "",
+                                            "TIPO DE TRANSACCION": "",
+                                            "IMPORTE RECUPERADO": "",
+                                            "NUMERO DE RECLAMO": "",
+                                            "TIPO DE FRAUDE": "",
+                                            "VIGILANCIA DE CUENTA": "",
+                                            "LEVANTAMIENTO VIGILANCIA": "NO APLICA",
+                                            "SOLUCION DE CASO": "Solucionada",
+                                            "FECHA Y HORA BLOQUEO": "",
+                                            "FECHA Y HORA DESBLOQUEO": "",
+                                            "COMUNICACION 1":  comunicacion_val_t5,
+                                            "COMUNICACION 2": "",
+                                            "COMUNICACION 3": "",
+                                            "FECHA MODIFICACION": "",
+                                            "MATERIALIZACION DE FRAUDE": "",
+                                            "SALDO DISPONIBLE": "",
+                                            "TIPO DE CUENTA": "",
+                                            "CONCLUSION": "",
+                                            "FECHA BLOQUEO DE TARJETA": ""
+                                        }
+
+                                        for col_num, col_name in enumerate(output_columns_t5, start=1):
+                                            val = row_data.get(col_name, "")
+                                            cell = ws_out_t5.cell(row=row_out_t5, column=col_num, value=val)
+                                            cell.number_format = "@"
+
+                                        row_out_t5 += 1
+
+                                    # Save to memory buffer
+                                    fag_buffer = io.BytesIO()
+                                    wb_out_t5.save(fag_buffer)
+                                    fag_data = fag_buffer.getvalue()
+
+                                    st.session_state.t5_output_data = fag_data
+                                    st.session_state.t5_total_rows = len(filtered_rows_t5)
+                                    st.session_state.t5_processed = True
+
+                        except Exception as ex:
+                            st.error(f"❌ Error al procesar plantilla FAG: {ex}")
+
+                if st.session_state.t5_processed:
+                    st.success(f"🎉 ¡Plantilla FAG Masiva generada con éxito! ({st.session_state.t5_total_rows} registros)")
+                    
+                    st.download_button(
+                        label=f"Descargar {nombre_archivo_t5}.xlsx",
+                        data=st.session_state.t5_output_data,
+                        file_name=f"{nombre_archivo_t5}.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        key="t5_dl_button"
+                    )
+
+        except Exception as e:
+            st.error(f"Error al leer el archivo Excel: {e}")
+
