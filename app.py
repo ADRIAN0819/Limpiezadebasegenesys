@@ -5,6 +5,9 @@ from openpyxl.styles import PatternFill
 import io
 import csv
 import numpy as np
+import datetime
+import re
+import os
 from clean_excel import clean_card, clean_account, clean_dni, clean_phone, to_str_no_sci
 
 # Page configuration
@@ -743,10 +746,6 @@ with tab2:
 with tab3:
     st.header("Generar Plantilla de Gestión de Fraude (Masivo)")
     st.markdown("Genera la plantilla de gestión a partir de la base masiva y los comercios riesgosos.")
-
-    import datetime
-    import re
-    import os
 
     if "t3_processed" not in st.session_state:
         st.session_state.t3_processed = False
@@ -1549,9 +1548,6 @@ with tab5:
                                 if not filtered_rows_t5:
                                     st.warning("⚠️ No se encontraron registros con ASESOR = 'ANULADA' o 'NO EXISTE'.")
                                 else:
-                                    # Load model or create new workbook
-                                    import io
-                                    
                                     model_path_t5 = "LIMPIAR/FAG SUBIDA MODELO.xlsx"
                                     if os.path.exists(model_path_t5):
                                         wb_out_t5 = openpyxl.load_workbook(model_path_t5)
