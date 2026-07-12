@@ -1518,7 +1518,6 @@ with tab5:
                 fecha_val_t5 = st.text_input("Ingresa la FECHA (DD/MM/AAAA):", value=default_fecha_t5, key="t5_fecha")
                 hora_val_t5 = st.text_input("Ingresa la HORA (HH:MM:SS):", value=default_hora_t5, key="t5_hora")
             with col_t5_2:
-                comunicacion_val_t5 = st.text_input("Ingresa el valor de COMUNICACION 1:", value="FAG - TARJETA ANULADA", key="t5_comunicacion")
                 nombre_archivo_t5 = st.text_input("Nombre para el archivo final (sin extensión):", value="FAG_MASIVO", key="t5_nombre_final")
 
             if st.button("Generar Plantilla FAG Masiva", key="t5_process_btn") or st.session_state.t5_processed:
@@ -1636,15 +1635,11 @@ with tab5:
                                         hora_evento = format_hora_t5(horatrx_raw)
 
                                         # Determinar comentario y comunicacion
+                                        comentario_val = ""
                                         if asesor_str == "ANULADA":
-                                            comentario_val = "FAG- TJ ANULADA"
-                                            comunicacion_1_val = comunicacion_val_t5
+                                            comunicacion_1_val = "FAG- TJ ANULADA"
                                         else:
-                                            comentario_val = "FAG-TJ NO EXISTE"
-                                            # Si el default o el valor ingresado contiene ANULADA/ANULADO, lo cambiamos a NO EXISTE
-                                            temp_com = re.sub(r'ANULADA', 'NO EXISTE', comunicacion_val_t5, flags=re.IGNORECASE)
-                                            temp_com = re.sub(r'ANULADO', 'NO EXISTE', temp_com, flags=re.IGNORECASE)
-                                            comunicacion_1_val = temp_com
+                                            comunicacion_1_val = "FAG-TJ NO EXISTE"
 
                                         row_data = {
                                             "EXPEDIENTE": "",

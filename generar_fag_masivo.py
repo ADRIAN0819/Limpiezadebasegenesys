@@ -100,10 +100,6 @@ def pedir_hora():
 
 INPUT_FECHA = pedir_fecha()
 INPUT_HORA = pedir_hora()
-INPUT_COMUNICACION = input("Ingresa el valor de COMUNICACION 1 [Default: FAG - TARJETA ANULADA]: ").strip()
-if not INPUT_COMUNICACION:
-    INPUT_COMUNICACION = "FAG - TARJETA ANULADA"
-
 while True:
     INPUT_NOMBRE = input("Ingresa el nombre del archivo final (sin extensión) [Default: FAG_MASIVO]: ").strip()
     if not INPUT_NOMBRE:
@@ -121,7 +117,6 @@ OUTPUT_FILE = os.path.join(DEVUELTO_DIR, INPUT_NOMBRE + ".xlsx")
 print()
 print(f"  Fecha         : {INPUT_FECHA}")
 print(f"  Hora          : {INPUT_HORA}")
-print(f"  Comunicación 1: {INPUT_COMUNICACION}")
 print(f"  Archivo Salida: {OUTPUT_FILE}")
 print()
 confirmar = input("¿Confirmar y generar el Excel? (s/n): ").strip().lower()
@@ -250,15 +245,11 @@ for row, asesor_str in filtered_rows:
     hora_evento = format_hora(horatrx_raw)
 
     # Determinar comentario y comunicacion
+    comentario_val = ""
     if asesor_str == "ANULADA":
-        comentario_val = "FAG- TJ ANULADA"
-        comunicacion_1_val = INPUT_COMUNICACION
+        comunicacion_1_val = "FAG- TJ ANULADA"
     else:
-        comentario_val = "FAG-TJ NO EXISTE"
-        # Si el default o el valor ingresado contiene ANULADA/ANULADO, lo cambiamos a NO EXISTE
-        temp_com = re.sub(r'ANULADA', 'NO EXISTE', INPUT_COMUNICACION, flags=re.IGNORECASE)
-        temp_com = re.sub(r'ANULADO', 'NO EXISTE', temp_com, flags=re.IGNORECASE)
-        comunicacion_1_val = temp_com
+        comunicacion_1_val = "FAG-TJ NO EXISTE"
 
     # Construir fila
     row_data = {
