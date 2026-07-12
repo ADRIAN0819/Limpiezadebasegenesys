@@ -1639,11 +1639,16 @@ with tab5:
 
                                         hora_evento = format_hora_t5(horatrx_raw)
 
-                                        # Determinar comentario
+                                        # Determinar comentario y comunicacion
                                         if asesor_str == "ANULADA":
                                             comentario_val = "FAG- TJ ANULADA"
+                                            comunicacion_1_val = comunicacion_val_t5
                                         else:
                                             comentario_val = "FAG-TJ NO EXISTE"
+                                            # Si el default o el valor ingresado contiene ANULADA/ANULADO, lo cambiamos a NO EXISTE
+                                            temp_com = re.sub(r'ANULADA', 'NO EXISTE', comunicacion_val_t5, flags=re.IGNORECASE)
+                                            temp_com = re.sub(r'ANULADO', 'NO EXISTE', temp_com, flags=re.IGNORECASE)
+                                            comunicacion_1_val = temp_com
 
                                         row_data = {
                                             "EXPEDIENTE": "",
@@ -1704,7 +1709,7 @@ with tab5:
                                             "SOLUCION DE CASO": "Solucionada",
                                             "FECHA Y HORA BLOQUEO": "",
                                             "FECHA Y HORA DESBLOQUEO": "",
-                                            "COMUNICACION 1":  comunicacion_val_t5,
+                                            "COMUNICACION 1":  comunicacion_1_val,
                                             "COMUNICACION 2": "",
                                             "COMUNICACION 3": "",
                                             "FECHA MODIFICACION": "",

@@ -249,11 +249,16 @@ for row, asesor_str in filtered_rows:
 
     hora_evento = format_hora(horatrx_raw)
 
-    # Determinar comentario
+    # Determinar comentario y comunicacion
     if asesor_str == "ANULADA":
         comentario_val = "FAG- TJ ANULADA"
+        comunicacion_1_val = INPUT_COMUNICACION
     else:
         comentario_val = "FAG-TJ NO EXISTE"
+        # Si el default o el valor ingresado contiene ANULADA/ANULADO, lo cambiamos a NO EXISTE
+        temp_com = re.sub(r'ANULADA', 'NO EXISTE', INPUT_COMUNICACION, flags=re.IGNORECASE)
+        temp_com = re.sub(r'ANULADO', 'NO EXISTE', temp_com, flags=re.IGNORECASE)
+        comunicacion_1_val = temp_com
 
     # Construir fila
     row_data = {
@@ -315,7 +320,7 @@ for row, asesor_str in filtered_rows:
         "SOLUCION DE CASO": "Solucionada",
         "FECHA Y HORA BLOQUEO": "",
         "FECHA Y HORA DESBLOQUEO": "",
-        "COMUNICACION 1": INPUT_COMUNICACION,
+        "COMUNICACION 1": comunicacion_1_val,
         "COMUNICACION 2": "",
         "COMUNICACION 3": "",
         "FECHA MODIFICACION": "",
