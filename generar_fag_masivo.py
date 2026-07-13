@@ -1,6 +1,6 @@
 """
 Genera la plantilla FAG MASIVO a partir de los registros de la carpeta LIMPIAR
-cuyo ASESOR sea ANULADA o NO EXISTE.
+cuyo ASESOR sea ANULADA, NO EXISTE o SIN DATOS.
 """
 
 import openpyxl
@@ -15,7 +15,7 @@ LIMPIAR_DIR = os.path.join(BASE_DIR, "LIMPIAR")
 MODELO_PATH = os.path.join(LIMPIAR_DIR, "FAG SUBIDA MODELO.xlsx")
 
 print("=" * 60)
-print("   GENERADOR DE PLANTILLA FAG MASIVO (ANULADAS / NO EXISTE)")
+print("   GENERADOR DE PLANTILLA FAG MASIVO (ANULADAS / NO EXISTE / SIN DATOS)")
 print("=" * 60)
 print()
 
@@ -140,7 +140,7 @@ def get_col_val(row, possible_names):
                 return str(val).strip()
     return None
 
-# Filtrar registros donde ASESOR es ANULADA o NO EXISTE
+# Filtrar registros donde ASESOR es ANULADA, NO EXISTE o SIN DATOS
 asesor_col = next((c for c in df.columns if "ASESOR" in c), None)
 if not asesor_col:
     print("[!] Error: No se encontró la columna ASESOR en la hoja seleccionada.")
@@ -151,10 +151,10 @@ for idx, row in df.iterrows():
     raw_asesor = row[asesor_col]
     if pd.notna(raw_asesor):
         asesor_str = str(raw_asesor).strip().upper()
-        if asesor_str in ["ANULADA", "NO EXISTE"]:
+        if asesor_str in ["ANULADA", "NO EXISTE", "SIN DATOS"]:
             filtered_rows.append((row, asesor_str))
 
-print(f"Se encontraron {len(filtered_rows)} registros con ASESOR = 'ANULADA' o 'NO EXISTE'.")
+print(f"Se encontraron {len(filtered_rows)} registros con ASESOR = 'ANULADA', 'NO EXISTE' o 'SIN DATOS'.")
 if not filtered_rows:
     print("No hay registros para generar. Operación finalizada.")
     exit(0)
@@ -248,8 +248,15 @@ for row, asesor_str in filtered_rows:
     comentario_val = ""
     if asesor_str == "ANULADA":
         comunicacion_1_val = "FAG- TJ ANULADA"
+    elif asesor_str == "SIN DATOS":
+        comunicacion_1_val = "FAG-TJ SIN DATOS"
     else:
         comunicacion_1_val = "FAG-TJ NO EXISTE"
+
+    if asesor_str == "SIN DATOS":
+        calificacion_val = "NFCSD - No fraude cliente sin datos(Definitivo)"
+    else:
+        calificacion_val = "FAG - Fraude por análisis del gestor"
 
     # Construir fila
     row_data = {
@@ -284,7 +291,7 @@ for row, asesor_str in filtered_rows:
         "REGLA MONITOREO": "",
         "REGLA O PARAMETRO DE BLOQUEO": "",
         "SITUACION_BDUC": "ACTUALIZADO",
-        "CALIFICACION": "FAG - Fraude por análisis del gestor",
+        "CALIFICACION": calificacion_val,
         "OPCION CALIFICACION": "",
         "FECHA Y HORA DE ENVIO DE CORREO": "",
         "IMPORTE DE FRAUDE": "",
