@@ -1639,8 +1639,7 @@ with tab5:
                                         if asesor_str == "ANULADA":
                                             comunicacion_1_val = "FAG- TJ ANULADA"
                                         elif asesor_str == "SIN DATOS":
-                                            comunicacion_1_val = "FAG-TJ SIN DATOS"
-                                            comentario_val = "NFCSD- NO FRAUDE CLIENTE SIN DATOS, NUMERO NO VALIDO"
+                                            comunicacion_1_val = "NFCSD- NO FRAUDE CLIENTE SIN DATOS, NUMERO NO VALIDO"
                                         else:
                                             comunicacion_1_val = "FAG-TJ NO EXISTE"
 

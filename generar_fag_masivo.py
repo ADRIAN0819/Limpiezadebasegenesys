@@ -249,7 +249,7 @@ for row, asesor_str in filtered_rows:
     if asesor_str == "ANULADA":
         comunicacion_1_val = "FAG- TJ ANULADA"
     elif asesor_str == "SIN DATOS":
-        comunicacion_1_val = "FAG-TJ SIN DATOS"
+        comunicacion_1_val = "NFCSD- NO FRAUDE CLIENTE SIN DATOS, NUMERO NO VALIDO"
     else:
         comunicacion_1_val = "FAG-TJ NO EXISTE"
 
