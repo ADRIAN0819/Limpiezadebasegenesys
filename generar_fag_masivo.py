@@ -218,6 +218,16 @@ def format_hora(h):
         return match.group(1)
     return s[:5] if len(s) >= 5 else s
 
+def normalize_canal(v):
+    if v is None or pd.isna(v):
+        return "-"
+    s = str(v).strip()
+    if not s:
+        return "-"
+    if s.upper() == "VRM":
+        return "VRM - VISA (TMGDV)"
+    return s
+
 row_out = 2
 for row, asesor_str in filtered_rows:
     # Obtener valores limpiando y formateando
@@ -236,11 +246,11 @@ for row, asesor_str in filtered_rows:
     if pd.notna(first_val):
         first_val_str = str(first_val).strip()
         if len(first_val_str) > 26:
-            canal = first_val_str[26:]
+            canal = normalize_canal(first_val_str[26:])
     if canal == "-":
         canal_val = get_col_val(row, ["BASE FINAL[REGLA]", "REGLA MONITOREO", "CANAL"])
         if canal_val:
-            canal = canal_val
+            canal = normalize_canal(canal_val)
 
     hora_evento = format_hora(horatrx_raw)
 
