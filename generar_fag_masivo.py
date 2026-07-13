@@ -140,7 +140,7 @@ def get_col_val(row, possible_names):
                 return str(val).strip()
     return None
 
-# Filtrar registros donde ASESOR es ANULADA, NO EXISTE o SIN DATOS
+# Filtrar registros donde ASESOR es ANULADA, BLOQUEADA, NO EXISTE o SIN DATOS
 asesor_col = next((c for c in df.columns if "ASESOR" in c), None)
 if not asesor_col:
     print("[!] Error: No se encontró la columna ASESOR en la hoja seleccionada.")
@@ -151,10 +151,10 @@ for idx, row in df.iterrows():
     raw_asesor = row[asesor_col]
     if pd.notna(raw_asesor):
         asesor_str = str(raw_asesor).strip().upper()
-        if asesor_str in ["ANULADA", "NO EXISTE", "SIN DATOS"]:
+        if asesor_str in ["ANULADA", "BLOQUEADA", "NO EXISTE", "SIN DATOS"]:
             filtered_rows.append((row, asesor_str))
 
-print(f"Se encontraron {len(filtered_rows)} registros con ASESOR = 'ANULADA', 'NO EXISTE' o 'SIN DATOS'.")
+print(f"Se encontraron {len(filtered_rows)} registros con ASESOR = 'ANULADA', 'BLOQUEADA', 'NO EXISTE' o 'SIN DATOS'.")
 if not filtered_rows:
     print("No hay registros para generar. Operación finalizada.")
     exit(0)
@@ -258,6 +258,8 @@ for row, asesor_str in filtered_rows:
     comentario_val = ""
     if asesor_str == "ANULADA":
         comunicacion_1_val = "FAG- TJ ANULADA"
+    elif asesor_str == "BLOQUEADA":
+        comunicacion_1_val = "FAG- TJ BLOQUEADA"
     elif asesor_str == "SIN DATOS":
         comunicacion_1_val = "NFCSD- NO FRAUDE CLIENTE SIN DATOS, NUMERO NO VALIDO"
     else:
