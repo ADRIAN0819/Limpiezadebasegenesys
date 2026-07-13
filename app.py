@@ -1470,10 +1470,10 @@ with tab4:
     else:
         st.info("💡 Sube ambos archivos obligatorios arriba para habilitar la corrección de cruces.")
 
-# ================= TAB 5: GENERAR FAG MASIVO (ANULADAS / NO EXISTE / SIN DATOS) =================
+# ================= TAB 5: GENERAR FAG MASIVO (ANULADAS / BLOQUEADAS / NO EXISTE / SIN DATOS) =================
 with tab5:
-    st.header("📋 Generar Plantilla FAG Masivo (Anuladas/No Existe/Sin Datos)")
-    st.markdown("Genera el archivo FAG Masivo filtrando registros con ASESOR = 'ANULADA', 'NO EXISTE' o 'SIN DATOS' a partir de una hoja de gestión.")
+    st.header("📋 Generar Plantilla FAG Masivo (Anuladas/Bloqueadas/No Existe/Sin Datos)")
+    st.markdown("Genera el archivo FAG Masivo filtrando registros con ASESOR = 'ANULADA', 'BLOQUEADA', 'NO EXISTE' o 'SIN DATOS' a partir de una hoja de gestión.")
 
     if "t5_processed" not in st.session_state:
         st.session_state.t5_processed = False
@@ -1541,11 +1541,11 @@ with tab5:
                                     raw_asesor = row[asesor_col_t5]
                                     if pd.notna(raw_asesor):
                                         asesor_str = str(raw_asesor).strip().upper()
-                                        if asesor_str in ["ANULADA", "NO EXISTE", "SIN DATOS"]:
+                                        if asesor_str in ["ANULADA", "BLOQUEADA", "NO EXISTE", "SIN DATOS"]:
                                             filtered_rows_t5.append((row, asesor_str))
 
                                 if not filtered_rows_t5:
-                                    st.warning("⚠️ No se encontraron registros con ASESOR = 'ANULADA', 'NO EXISTE' o 'SIN DATOS'.")
+                                    st.warning("⚠️ No se encontraron registros con ASESOR = 'ANULADA', 'BLOQUEADA', 'NO EXISTE' o 'SIN DATOS'.")
                                 else:
                                     model_path_t5 = "LIMPIAR/FAG SUBIDA MODELO.xlsx"
                                     if os.path.exists(model_path_t5):
@@ -1638,6 +1638,8 @@ with tab5:
                                         comentario_val = ""
                                         if asesor_str == "ANULADA":
                                             comunicacion_1_val = "FAG- TJ ANULADA"
+                                        elif asesor_str == "BLOQUEADA":
+                                            comunicacion_1_val = "FAG- TJ BLOQUEADA"
                                         elif asesor_str == "SIN DATOS":
                                             comunicacion_1_val = "NFCSD- NO FRAUDE CLIENTE SIN DATOS, NUMERO NO VALIDO"
                                         else:
