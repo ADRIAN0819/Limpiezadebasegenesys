@@ -8,7 +8,39 @@ import numpy as np
 import datetime
 import re
 import os
+import glob
+import unicodedata
+import math
 from clean_excel import clean_card, clean_account, clean_dni, clean_phone, to_str_no_sci
+
+def format_seconds_to_hhmmss(seconds):
+    if pd.isna(seconds):
+        return "00:00:00"
+    try:
+        seconds = float(seconds)
+    except (ValueError, TypeError):
+        return "00:00:00"
+        
+    if math.isnan(seconds):
+        return "00:00:00"
+    
+    hh = int(seconds // 3600)
+    mm = int((seconds % 3600) // 60)
+    ss = int(seconds % 60)
+    return f"{hh:02d}:{mm:02d}:{ss:02d}"
+
+def normalize_name(text):
+    if not isinstance(text, str):
+        return ""
+    text = text.upper()
+    text = "".join(c for c in unicodedata.normalize('NFD', text) if unicodedata.category(c) != 'Mn')
+    text = text.replace("NO", "NIÑO")
+    text = text.replace("NUEZ", "NUÑEZ")
+    text = text.replace("SNCHEZ", "SANCHEZ")
+    text = text.replace("DOMNGUEZ", "DOMINGUEZ")
+    text = text.replace("PREZ", "PEREZ")
+    text = re.sub(r'[^A-ZÑ\s]', ' ', text)
+    return " ".join(text.split())
 
 # Page configuration
 st.set_page_config(
@@ -54,7 +86,14 @@ st.markdown("""
 st.title("🧼 Sistema de Gestión de Bases de Fraude Genesys")
 st.markdown("Plataforma interactiva para limpieza de bases y cruce de datos del Predictivo.")
 
-tab1, tab2, tab3, tab4, tab5 = st.tabs(["🧼 Limpieza de Base (Excel)", "🔀 Generar Base de Cruce (Predictivo)", "📋 Generar Plantilla (Masivo)", "🔧 Corrección de Cruces", "📋 Generar FAG Masivo (Anuladas/No Existe)"])
+tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
+    "🧼 Limpieza de Base (Excel)", 
+    "🔀 Generar Base de Cruce (Predictivo)", 
+    "📋 Generar Plantilla (Masivo)", 
+    "🔧 Corrección de Cruces", 
+    "📋 Generar FAG Masivo (Anuladas/No Existe)",
+    "📊 Productividad de Agentes"
+])
 
 # ================= TAB 1: LIMPIEZA DE BASE =================
 with tab1:
@@ -1752,4 +1791,286 @@ with tab5:
 
         except Exception as e:
             st.error(f"Error al leer el archivo Excel: {e}")
+
+
+# ================= TAB 6: PRODUCTIVIDAD DE AGENTES =================
+with tab6:
+    st.header("📊 Resumen de Productividad de Agentes")
+    st.markdown("Genera el reporte consolidado de productividad de agentes cruzando la lista de AG, el Resumen del Rendimiento en llamadas (CSV) y los reportes Webform INBOUND / OUTBOUND.")
+
+    if "t6_processed" not in st.session_state:
+        st.session_state.t6_processed = False
+        st.session_state.t6_data = None
+        st.session_state.t6_df = None
+
+    st.subheader("📁 Archivos de Entrada")
+    st.markdown("_Puedes subir tus propios archivos o dejar los campos vacíos para usar automáticamente los archivos locales de la carpeta `PRODUCTIVIDAD`._")
+
+    col_ag, col_res = st.columns(2)
+    with col_ag:
+        up_ag = st.file_uploader("Lista de AGs (AG.xlsx)", type=["xlsx", "xls"], key="t6_up_ag")
+    with col_res:
+        up_resumen = st.file_uploader("Resumen rendimiento (*Resumen del rendimiento de agente.csv)", type=["csv"], key="t6_up_resumen")
+
+    col_in, col_out = st.columns(2)
+    with col_in:
+        up_inbound = st.file_uploader("Webform INBOUND (*INBOUND*.xlsx) [Opcional]", type=["xlsx", "xls"], key="t6_up_inbound")
+    with col_out:
+        up_outbound = st.file_uploader("Webform OUTBOUND (*OUTBOUND*.xlsx) [Opcional]", type=["xlsx", "xls"], key="t6_up_outbound")
+
+    if st.button("🚀 Generar Reporte de Productividad", key="t6_process_btn"):
+        with st.spinner("Procesando datos de productividad de agentes..."):
+            try:
+                # 1. Determinar fuente de AG
+                ag_src = up_ag
+                if ag_src is None:
+                    local_ag = glob.glob("PRODUCTIVIDAD/AG.xlsx") or glob.glob("AG.xlsx") or glob.glob("**/AG.xlsx", recursive=True)
+                    if local_ag:
+                        ag_src = local_ag[0]
+                    else:
+                        st.error("❌ No se encontró la lista de AGs (AG.xlsx). Por favor sube el archivo.")
+                        st.stop()
+
+                # 2. Determinar fuente de Resumen CSV
+                resumen_src = up_resumen
+                if resumen_src is None:
+                    local_res = glob.glob("PRODUCTIVIDAD/*Resumen del rendimiento de agente.csv") or glob.glob("*Resumen del rendimiento de agente.csv") or glob.glob("**/*Resumen del rendimiento de agente.csv", recursive=True)
+                    if local_res:
+                        resumen_src = local_res[0]
+                    else:
+                        st.error("❌ No se encontró el archivo 'Resumen del rendimiento de agente.csv'. Por favor sube el archivo.")
+                        st.stop()
+
+                # 3. Determinar fuente de INBOUND (Opcional)
+                inbound_src = up_inbound
+                if inbound_src is None:
+                    local_in = glob.glob("PRODUCTIVIDAD/*INBOUND*.xlsx") or glob.glob("*INBOUND*.xlsx") or glob.glob("**/*INBOUND*.xlsx", recursive=True)
+                    if local_in:
+                        inbound_src = local_in[0]
+
+                # 4. Determinar fuente de OUTBOUND (Opcional)
+                outbound_src = up_outbound
+                if outbound_src is None:
+                    local_out = glob.glob("PRODUCTIVIDAD/*OUTBOUND*.xlsx") or glob.glob("*OUTBOUND*.xlsx") or glob.glob("**/*OUTBOUND*.xlsx", recursive=True)
+                    if local_out:
+                        outbound_src = local_out[0]
+
+                # Leer AG
+                if isinstance(ag_src, str):
+                    df_ag = pd.read_excel(ag_src, header=None)
+                else:
+                    ag_src.seek(0)
+                    df_ag = pd.read_excel(ag_src, header=None)
+
+                lista_ag = df_ag[0].dropna().astype(str).tolist()
+                lista_ag = [ag.strip() for ag in lista_ag if str(ag).strip()]
+
+                df_ag_clean = df_ag[[0, 1]].dropna(subset=[0]).rename(columns={0: 'AG', 1: 'Nombre'})
+                df_ag_clean['AG'] = df_ag_clean['AG'].astype(str).str.strip()
+                df_ag_clean['Nombre_norm'] = df_ag_clean['Nombre'].apply(normalize_name)
+
+                # Leer Resumen CSV
+                if isinstance(resumen_src, str):
+                    try:
+                        df_resumen = pd.read_csv(resumen_src, sep=';', encoding='utf-8')
+                    except UnicodeDecodeError:
+                        df_resumen = pd.read_csv(resumen_src, sep=';', encoding='latin1')
+                else:
+                    try:
+                        resumen_src.seek(0)
+                        df_resumen = pd.read_csv(resumen_src, sep=';', encoding='utf-8')
+                    except Exception:
+                        resumen_src.seek(0)
+                        df_resumen = pd.read_csv(resumen_src, sep=';', encoding='latin1')
+
+                columnas_necesarias = ['Nombre del agente', 'Contestadas', 'Saliente', 'Manejo medio']
+                for col in columnas_necesarias:
+                    if col not in df_resumen.columns:
+                        st.error(f"❌ La columna '{col}' no se encontró en el archivo de resumen.")
+                        st.stop()
+
+                def extract_ag(nombre):
+                    nombre_str = str(nombre)
+                    for ag in lista_ag:
+                        if ag in nombre_str:
+                            return ag
+                    return None
+
+                df_resumen = df_resumen.copy()
+                df_resumen['AG_matched'] = df_resumen['Nombre del agente'].apply(extract_ag)
+                df_filtrado = df_resumen[df_resumen['AG_matched'].notnull()].copy()
+
+                if df_filtrado.empty:
+                    st.error("❌ No se encontraron coincidencias de AG en el archivo de resumen.")
+                    st.stop()
+
+                df_resultado = pd.merge(df_filtrado, df_ag_clean[['AG', 'Nombre']], left_on='AG_matched', right_on='AG', how='left')
+                df_resultado['Contestadas'] = df_resultado['Contestadas'].fillna(0).astype(int)
+                df_resultado['Saliente'] = df_resultado['Saliente'].fillna(0).astype(int)
+                df_resultado['Manejo Medio'] = df_resultado['Manejo medio'].apply(format_seconds_to_hhmmss)
+
+                # Procesar Webforms
+                in_counts = {ag: 0 for ag in lista_ag}
+                out_counts = {ag: 0 for ag in lista_ag}
+                match_cache = {}
+
+                def find_ag_for_gestor(gestor_name):
+                    if not isinstance(gestor_name, str) or not gestor_name.strip():
+                        return None
+                    gestor_clean = gestor_name.strip()
+                    if gestor_clean in match_cache:
+                        return match_cache[gestor_clean]
+
+                    g_norm = normalize_name(gestor_clean)
+                    g_tokens = set(g_norm.split())
+                    if not g_tokens:
+                        return None
+
+                    best_ag = None
+                    best_score = 0
+                    best_row = None
+
+                    for idx, row in df_ag_clean.iterrows():
+                        ag_tokens = set(row['Nombre_norm'].split())
+                        overlap = g_tokens.intersection(ag_tokens)
+                        score = len(overlap)
+                        if score > best_score:
+                            best_score = score
+                            best_row = row
+                        elif score == best_score and best_score > 0:
+                            cur_diff = abs(len(g_tokens) - len(set(best_row['Nombre_norm'].split())))
+                            new_diff = abs(len(g_tokens) - len(ag_tokens))
+                            if new_diff < cur_diff:
+                                best_row = row
+
+                    if best_row is not None and best_score >= 2:
+                        resolved_ag = best_row['AG']
+                    else:
+                        resolved_ag = None
+
+                    match_cache[gestor_clean] = resolved_ag
+                    return resolved_ag
+
+                # INBOUND
+                if inbound_src is not None:
+                    try:
+                        if hasattr(inbound_src, 'seek'):
+                            inbound_src.seek(0)
+                        df_in = pd.read_excel(inbound_src)
+                        if 'GESTOR' in df_in.columns:
+                            for gestor in df_in['GESTOR'].dropna():
+                                ag_code = find_ag_for_gestor(gestor)
+                                if ag_code:
+                                    in_counts[ag_code] += 1
+                    except Exception as e:
+                        st.warning(f"Advertencia al procesar Webform INBOUND: {e}")
+
+                # OUTBOUND
+                if outbound_src is not None:
+                    try:
+                        if hasattr(outbound_src, 'seek'):
+                            outbound_src.seek(0)
+                        df_out = pd.read_excel(outbound_src)
+                        if 'GESTOR' in df_out.columns:
+                            for gestor in df_out['GESTOR'].dropna():
+                                ag_code = find_ag_for_gestor(gestor)
+                                if ag_code:
+                                    out_counts[ag_code] += 1
+                    except Exception as e:
+                        st.warning(f"Advertencia al procesar Webform OUTBOUND: {e}")
+
+                df_resultado['WF IN'] = df_resultado['AG'].apply(lambda ag: in_counts.get(ag, 0))
+                df_resultado['WF OUT'] = df_resultado['AG'].apply(lambda ag: out_counts.get(ag, 0))
+
+                df_resultado = df_resultado[
+                    ~((df_resultado['Contestadas'] == 0) & (df_resultado['Saliente'] == 0))
+                ].copy()
+                df_resultado = df_resultado.sort_values(by='Saliente', ascending=False)
+                df_resultado = df_resultado[['AG', 'Nombre', 'Saliente', 'Contestadas', 'Manejo Medio', 'WF IN', 'WF OUT']]
+
+                # Export a Excel con diseño openpyxl
+                out_buffer = io.BytesIO()
+                with pd.ExcelWriter(out_buffer, engine='openpyxl') as writer:
+                    df_resultado.to_excel(writer, sheet_name='Productividad Agentes', index=False)
+                    workbook = writer.book
+                    worksheet = writer.sheets['Productividad Agentes']
+                    worksheet.views.sheetView[0].showGridLines = True
+
+                    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+                    header_fill = PatternFill(start_color='1F4E78', end_color='1F4E78', fill_type='solid')
+                    header_font = Font(name='Segoe UI', size=11, bold=True, color='FFFFFF')
+                    zebra_fill = PatternFill(start_color='F2F5F8', end_color='F2F5F8', fill_type='solid')
+                    thin_border = Border(
+                        left=Side(style='thin', color='D9D9D9'),
+                        right=Side(style='thin', color='D9D9D9'),
+                        top=Side(style='thin', color='D9D9D9'),
+                        bottom=Side(style='thin', color='D9D9D9')
+                    )
+                    font_regular = Font(name='Segoe UI', size=10)
+                    align_center = Alignment(horizontal='center', vertical='center')
+                    align_left = Alignment(horizontal='left', vertical='center')
+
+                    for col_num in range(1, len(df_resultado.columns) + 1):
+                        cell = worksheet.cell(row=1, column=col_num)
+                        cell.fill = header_fill
+                        cell.font = header_font
+                        cell.alignment = align_center
+                        cell.border = thin_border
+
+                    for row_idx in range(2, worksheet.max_row + 1):
+                        is_even = (row_idx % 2 == 0)
+                        for col_idx in range(1, len(df_resultado.columns) + 1):
+                            cell = worksheet.cell(row=row_idx, column=col_idx)
+                            cell.font = font_regular
+                            cell.border = thin_border
+                            if is_even:
+                                cell.fill = zebra_fill
+                            col_name = df_resultado.columns[col_idx - 1]
+                            if col_name == 'Nombre':
+                                cell.alignment = align_left
+                            else:
+                                cell.alignment = align_center
+
+                    for col in worksheet.columns:
+                        max_len = 0
+                        col_letter = col[0].column_letter
+                        for cell in col:
+                            if cell.value is not None:
+                                max_len = max(max_len, len(str(cell.value)))
+                        worksheet.column_dimensions[col_letter].width = max(max_len + 4, 12)
+
+                st.session_state.t6_df = df_resultado
+                st.session_state.t6_data = out_buffer.getvalue()
+                st.session_state.t6_processed = True
+
+            except Exception as e:
+                st.error(f"❌ Error durante el procesamiento de productividad: {e}")
+
+    if st.session_state.t6_processed and st.session_state.t6_df is not None:
+        st.success("🎉 ¡Proceso de Productividad de Agentes completado exitosamente!")
+
+        df_res = st.session_state.t6_df
+        m1, m2, m3, m4, m5 = st.columns(5)
+        with m1:
+            st.metric("Total Agentes", len(df_res))
+        with m2:
+            st.metric("Total Salientes", df_res["Saliente"].sum())
+        with m3:
+            st.metric("Total Contestadas", df_res["Contestadas"].sum())
+        with m4:
+            st.metric("Total WF IN", df_res["WF IN"].sum())
+        with m5:
+            st.metric("Total WF OUT", df_res["WF OUT"].sum())
+
+        st.subheader("📋 Vista Previa del Reporte")
+        st.dataframe(df_res, use_container_width=True)
+
+        st.download_button(
+            label="Descargar Productividad_Agentes.xlsx",
+            data=st.session_state.t6_data,
+            file_name="Productividad_Agentes.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            key="t6_dl_button"
+        )
+
 
