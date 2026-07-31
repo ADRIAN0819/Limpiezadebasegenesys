@@ -29,6 +29,22 @@ def format_seconds_to_hhmmss(seconds):
     ss = int(seconds % 60)
     return f"{hh:02d}:{mm:02d}:{ss:02d}"
 
+def parse_time_to_seconds(val):
+    if pd.isna(val):
+        return None
+    s = str(val).strip()
+    if not s:
+        return None
+    if hasattr(val, 'hour') and hasattr(val, 'minute'):
+        return val.hour * 3600 + val.minute * 60 + getattr(val, 'second', 0)
+    match = re.search(r'(\d{1,2}):(\d{2})(?::(\d{2}))?', s)
+    if match:
+        hh = int(match.group(1))
+        mm = int(match.group(2))
+        ss = int(match.group(3)) if match.group(3) else 0
+        return hh * 3600 + mm * 60 + ss
+    return None
+
 def normalize_name(text):
     if not isinstance(text, str):
         return ""
@@ -1803,7 +1819,7 @@ with tab6:
         st.session_state.t6_data = None
         st.session_state.t6_df = None
 
-    st.subheader("📁 Archivos de Entrada")
+    st.subheader("📁 Archivos de Entrada y Filtros")
     st.markdown("_Puedes subir tus propios archivos o dejar los campos vacíos para usar automáticamente los archivos locales de la carpeta `PRODUCTIVIDAD`._")
 
     col_ag, col_res = st.columns(2)
@@ -1817,6 +1833,8 @@ with tab6:
         up_inbound = st.file_uploader("Webform INBOUND (*INBOUND*.xlsx) [Opcional]", type=["xlsx", "xls"], key="t6_up_inbound")
     with col_out:
         up_outbound = st.file_uploader("Webform OUTBOUND (*OUTBOUND*.xlsx) [Opcional]", type=["xlsx", "xls"], key="t6_up_outbound")
+
+    up_cutoff = st.text_input("⏰ Hora límite de corte para Webform IN/OUT (opcional, ej: 15:00):", value="", placeholder="HH:MM (ejemplo: 15:00 para ignorar registros después de las 15:00)", key="t6_cutoff")
 
     if st.button("🚀 Generar Reporte de Productividad", key="t6_process_btn"):
         with st.spinner("Procesando datos de productividad de agentes..."):
@@ -1865,9 +1883,16 @@ with tab6:
                 lista_ag = df_ag[0].dropna().astype(str).tolist()
                 lista_ag = [ag.strip() for ag in lista_ag if str(ag).strip()]
 
-                df_ag_clean = df_ag[[0, 1]].dropna(subset=[0]).rename(columns={0: 'AG', 1: 'Nombre'})
+                # Extraer Turno de la 3era columna (índice 2) si está presente
+                if len(df_ag.columns) >= 3:
+                    df_ag_clean = df_ag[[0, 1, 2]].dropna(subset=[0]).rename(columns={0: 'AG', 1: 'Nombre', 2: 'Turno'})
+                else:
+                    df_ag_clean = df_ag[[0, 1]].dropna(subset=[0]).rename(columns={0: 'AG', 1: 'Nombre'})
+                    df_ag_clean['Turno'] = ""
+
                 df_ag_clean['AG'] = df_ag_clean['AG'].astype(str).str.strip()
                 df_ag_clean['Nombre_norm'] = df_ag_clean['Nombre'].apply(normalize_name)
+                df_ag_clean['Turno'] = df_ag_clean['Turno'].fillna("").astype(str).str.strip()
 
                 # Leer Resumen CSV
                 if isinstance(resumen_src, str):
@@ -1904,10 +1929,14 @@ with tab6:
                     st.error("❌ No se encontraron coincidencias de AG en el archivo de resumen.")
                     st.stop()
 
-                df_resultado = pd.merge(df_filtrado, df_ag_clean[['AG', 'Nombre']], left_on='AG_matched', right_on='AG', how='left')
+                df_resultado = pd.merge(df_filtrado, df_ag_clean[['AG', 'Nombre', 'Turno']], left_on='AG_matched', right_on='AG', how='left')
+                df_resultado['Turno'] = df_resultado['Turno'].fillna("")
                 df_resultado['Contestadas'] = df_resultado['Contestadas'].fillna(0).astype(int)
                 df_resultado['Saliente'] = df_resultado['Saliente'].fillna(0).astype(int)
                 df_resultado['Manejo Medio'] = df_resultado['Manejo medio'].apply(format_seconds_to_hhmmss)
+
+                # Determinar segundos límite de corte si se especificó
+                cutoff_sec = parse_time_to_seconds(up_cutoff) if up_cutoff.strip() else None
 
                 # Procesar Webforms
                 in_counts = {ag: 0 for ag in lista_ag}
@@ -1958,6 +1987,9 @@ with tab6:
                             inbound_src.seek(0)
                         df_in = pd.read_excel(inbound_src)
                         if 'GESTOR' in df_in.columns:
+                            # Filtrar por hora límite si se configuró
+                            if cutoff_sec is not None and 'HORA' in df_in.columns:
+                                df_in = df_in[df_in['HORA'].apply(lambda x: (s := parse_time_to_seconds(x)) is not None and s <= cutoff_sec)]
                             for gestor in df_in['GESTOR'].dropna():
                                 ag_code = find_ag_for_gestor(gestor)
                                 if ag_code:
@@ -1972,6 +2004,9 @@ with tab6:
                             outbound_src.seek(0)
                         df_out = pd.read_excel(outbound_src)
                         if 'GESTOR' in df_out.columns:
+                            # Filtrar por hora límite si se configuró
+                            if cutoff_sec is not None and 'HORA' in df_out.columns:
+                                df_out = df_out[df_out['HORA'].apply(lambda x: (s := parse_time_to_seconds(x)) is not None and s <= cutoff_sec)]
                             for gestor in df_out['GESTOR'].dropna():
                                 ag_code = find_ag_for_gestor(gestor)
                                 if ag_code:
@@ -1986,7 +2021,7 @@ with tab6:
                     ~((df_resultado['Contestadas'] == 0) & (df_resultado['Saliente'] == 0))
                 ].copy()
                 df_resultado = df_resultado.sort_values(by='Saliente', ascending=False)
-                df_resultado = df_resultado[['AG', 'Nombre', 'Saliente', 'Contestadas', 'Manejo Medio', 'WF IN', 'WF OUT']]
+                df_resultado = df_resultado[['AG', 'Nombre', 'Turno', 'Saliente', 'Contestadas', 'Manejo Medio', 'WF IN', 'WF OUT']]
 
                 # Export a Excel con diseño openpyxl
                 out_buffer = io.BytesIO()
@@ -2026,7 +2061,7 @@ with tab6:
                             if is_even:
                                 cell.fill = zebra_fill
                             col_name = df_resultado.columns[col_idx - 1]
-                            if col_name == 'Nombre':
+                            if col_name in ['Nombre', 'Turno']:
                                 cell.alignment = align_left
                             else:
                                 cell.alignment = align_center
