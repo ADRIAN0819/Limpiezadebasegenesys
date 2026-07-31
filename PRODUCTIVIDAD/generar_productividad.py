@@ -34,21 +34,46 @@ def normalize_name(text):
     text = re.sub(r'[^A-ZÑ\s]', ' ', text)
     return " ".join(text.split())
 
-def parse_time_to_seconds(val):
+def parse_date(val):
     if pd.isna(val):
         return None
+    if hasattr(val, 'date'):
+        return val.date()
     s = str(val).strip()
     if not s:
         return None
-    if hasattr(val, 'hour') and hasattr(val, 'minute'):
-        return val.hour * 3600 + val.minute * 60 + getattr(val, 'second', 0)
-    match = re.search(r'(\d{1,2}):(\d{2})(?::(\d{2}))?', s)
-    if match:
-        hh = int(match.group(1))
-        mm = int(match.group(2))
-        ss = int(match.group(3)) if match.group(3) else 0
-        return hh * 3600 + mm * 60 + ss
-    return None
+    try:
+        dt = pd.to_datetime(s, dayfirst=True)
+        return dt.date()
+    except Exception:
+        return None
+
+def filter_by_cutoff_max_date(df, cutoff_time_str):
+    cutoff_sec = parse_time_to_seconds(cutoff_time_str)
+    if cutoff_sec is None or 'HORA' not in df.columns:
+        return df
+
+    fecha_col = next((c for c in df.columns if str(c).strip().upper() in ['FECHA', 'DIA DE EVENTO']), None)
+    if fecha_col is None:
+        return df[df['HORA'].apply(lambda x: (s := parse_time_to_seconds(x)) is not None and s <= cutoff_sec)]
+
+    parsed_dates = df[fecha_col].apply(parse_date)
+    valid_dates = [d for d in parsed_dates if d is not None]
+    if not valid_dates:
+        return df[df['HORA'].apply(lambda x: (s := parse_time_to_seconds(x)) is not None and s <= cutoff_sec)]
+
+    max_date = max(valid_dates)
+
+    def keep_row(row):
+        d = parse_date(row[fecha_col])
+        if d is not None and d < max_date:
+            return True
+        s = parse_time_to_seconds(row['HORA'])
+        if s is None:
+            return True
+        return s <= cutoff_sec
+
+    return df[df.apply(keep_row, axis=1)].copy()
 
 def procesar_productividad(cutoff_time=None):
     # 1. Leer el archivo AG
@@ -180,8 +205,8 @@ def procesar_productividad(cutoff_time=None):
         try:
             df_in = pd.read_excel(archivo_in)
             if 'GESTOR' in df_in.columns:
-                if cutoff_sec is not None and 'HORA' in df_in.columns:
-                    df_in = df_in[df_in['HORA'].apply(lambda x: (s := parse_time_to_seconds(x)) is not None and s <= cutoff_sec)]
+                if cutoff_time:
+                    df_in = filter_by_cutoff_max_date(df_in, cutoff_time)
                 for gestor in df_in['GESTOR'].dropna():
                     ag_code = find_ag_for_gestor(gestor)
                     if ag_code:
@@ -200,8 +225,8 @@ def procesar_productividad(cutoff_time=None):
         try:
             df_out = pd.read_excel(archivo_out)
             if 'GESTOR' in df_out.columns:
-                if cutoff_sec is not None and 'HORA' in df_out.columns:
-                    df_out = df_out[df_out['HORA'].apply(lambda x: (s := parse_time_to_seconds(x)) is not None and s <= cutoff_sec)]
+                if cutoff_time:
+                    df_out = filter_by_cutoff_max_date(df_out, cutoff_time)
                 for gestor in df_out['GESTOR'].dropna():
                     ag_code = find_ag_for_gestor(gestor)
                     if ag_code:
