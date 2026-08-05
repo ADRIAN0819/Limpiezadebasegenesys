@@ -20,6 +20,40 @@ def format_seconds_to_hhmmss(seconds):
     ss = int(seconds % 60)
     return f"{hh:02d}:{mm:02d}:{ss:02d}"
 
+def parse_time_to_seconds(val):
+    if pd.isna(val) or val is None:
+        return None
+    if isinstance(val, (int, float)):
+        if 0 <= val <= 1:
+            return int(round(val * 86400))
+        if 0 <= val <= 86400:
+            return int(val)
+        return None
+    if hasattr(val, 'hour') and hasattr(val, 'minute') and hasattr(val, 'second'):
+        return val.hour * 3600 + val.minute * 60 + val.second
+    s = str(val).strip()
+    if not s:
+        return None
+    try:
+        dt = pd.to_datetime(s)
+        return dt.hour * 3600 + dt.minute * 60 + dt.second
+    except Exception:
+        pass
+    m = re.search(r'\b(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(AM|PM)?\b', s, re.IGNORECASE)
+    if m:
+        h = int(m.group(1))
+        mn = int(m.group(2))
+        sc = int(m.group(3)) if m.group(3) else 0
+        mer = m.group(4)
+        if mer:
+            mer = mer.upper()
+            if mer == "PM" and h < 12:
+                h += 12
+            elif mer == "AM" and h == 12:
+                h = 0
+        return h * 3600 + mn * 60 + sc
+    return None
+
 def normalize_name(text):
     if not isinstance(text, str):
         return ""
